@@ -103,7 +103,12 @@ final class PixelBufferRenderer: Sendable {
   func flushDisplayLayer() {
     let layer = state.withLock { $0.displayLayer.layer }
     DispatchQueue.main.async { [layer] in
-      layer?.sampleBufferRenderer.flush()
+      guard let layer else { return }
+      if #available(iOS 17.0, *) {
+        layer.sampleBufferRenderer.flush()
+      } else {
+        layer.flush()
+      }
     }
   }
 

@@ -9,31 +9,31 @@ import Synchronization
 /// Weak `Media` probes cannot detect these leaks because each operation owns
 /// the native media pointer, not the Swift `Media` wrapper.
 enum MediaOperationLifetimeProbe {
-  private static let parseCount = Atomic<Int>(0)
-  private static let thumbnailCount = Atomic<Int>(0)
+  private static let parseCount = Mutex(0)
+  private static let thumbnailCount = Mutex(0)
 
   static var liveParseCount: Int {
-    parseCount.load(ordering: .relaxed)
+    parseCount.withLock { $0 }
   }
 
   static var liveThumbnailCount: Int {
-    thumbnailCount.load(ordering: .relaxed)
+    thumbnailCount.withLock { $0 }
   }
 
   static func parseCreated() {
-    parseCount.add(1, ordering: .relaxed)
+    parseCount.withLock { $0 += 1 }
   }
 
   static func parseDestroyed() {
-    parseCount.subtract(1, ordering: .relaxed)
+    parseCount.withLock { $0 -= 1 }
   }
 
   static func thumbnailCreated() {
-    thumbnailCount.add(1, ordering: .relaxed)
+    thumbnailCount.withLock { $0 += 1 }
   }
 
   static func thumbnailDestroyed() {
-    thumbnailCount.subtract(1, ordering: .relaxed)
+    thumbnailCount.withLock { $0 -= 1 }
   }
 }
 #endif

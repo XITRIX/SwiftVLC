@@ -1,6 +1,6 @@
 import CLibVLC
 import Foundation
-import Observation
+import Perception
 
 /// An observable media player.
 ///
@@ -12,7 +12,7 @@ import Observation
 /// and the track lists) are fed by an internal event consumer. No
 /// delegate protocols, Combine publishers, or manual bridging are
 /// involved.
-@Observable
+@Perceptible
 @MainActor
 public final class Player {
   // MARK: - Observable State
@@ -397,16 +397,16 @@ public final class Player {
 
   // MARK: - Internal
 
-  @ObservationIgnored
+  @PerceptionIgnored
   nonisolated(unsafe) var pointer: OpaquePointer // libvlc_media_player_t*
-  @ObservationIgnored
+  @PerceptionIgnored
   var nativeHandleLifetime: NativePlayerHandleLifetime
   #if os(iOS) || os(macOS)
-  @ObservationIgnored
+  @PerceptionIgnored
   weak var directPiPVideoCallbackRegistration: DirectPiPVideoCallbackRegistration?
-  @ObservationIgnored
+  @PerceptionIgnored
   var directPiPVideoCallbackSlot: DirectPiPVideoCallbackSlot?
-  @ObservationIgnored
+  @PerceptionIgnored
   var directPiPVideoCallbackGeneration: UInt64 = 0
   #endif
   let eventBridge: EventBridge

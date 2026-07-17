@@ -1,5 +1,5 @@
 import CLibVLC
-import Observation
+@_exported import Perception
 
 /// A 10-band audio equalizer with preamp and preset support.
 ///
@@ -13,17 +13,17 @@ import Observation
 /// try eq.setAmplification(10.0, forBand: 0)
 /// player.equalizer = eq
 /// ```
-@Observable
+@Perceptible
 @MainActor
 public final class Equalizer {
-  @ObservationIgnored
+  @PerceptionIgnored
   let pointer: OpaquePointer // libvlc_equalizer_t*
 
   /// Fires on the main actor after any observable change. `Player`
   /// installs a handler here on assignment to re-apply the equalizer to
   /// its audio output, since libVLC copies settings on
   /// `libvlc_media_player_set_equalizer` and does not retain the reference.
-  @ObservationIgnored
+  @PerceptionIgnored
   var onChange: (@MainActor () -> Void)?
 
   /// Creates a new equalizer with flat (0 dB) settings.
