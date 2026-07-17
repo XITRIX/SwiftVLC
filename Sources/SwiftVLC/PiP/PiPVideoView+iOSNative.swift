@@ -51,6 +51,94 @@ final class IOSNativePiPHostView: UIView {
 typealias IOSNativePictureInPictureReadyBlock = @convention(block) (AnyObject) -> Void
 typealias IOSNativePiPStateChangeEventHandler = @convention(block) (Bool) -> Void
 
+/// Keeps libVLC's native PiP delegate behavior while forwarding AVKit's
+/// restore callback to the public ``PiPController`` hook.
+final class IOSNativePiPDelegateProxy: NSObject,
+  AVPictureInPictureControllerDelegate, @unchecked Sendable {
+  weak var originalDelegate: (any AVPictureInPictureControllerDelegate)?
+  weak var backend: IOSNativePiPBackend?
+  let generation: IOSNativePiPCallbackGenerations.ReadyCallback
+
+  init(
+    originalDelegate: (any AVPictureInPictureControllerDelegate)?,
+    backend: IOSNativePiPBackend,
+    generation: IOSNativePiPCallbackGenerations.ReadyCallback
+  ) {
+    self.originalDelegate = originalDelegate
+    self.backend = backend
+    self.generation = generation
+  }
+
+  nonisolated func pictureInPictureControllerWillStartPictureInPicture(
+    _ pictureInPictureController: AVPictureInPictureController
+  ) {
+    nonisolated(unsafe) let pictureInPictureController = pictureInPictureController
+    pipMainActorSync { [weak self] in
+      self?.originalDelegate?
+        .pictureInPictureControllerWillStartPictureInPicture?(pictureInPictureController)
+    }
+  }
+
+  nonisolated func pictureInPictureControllerDidStartPictureInPicture(
+    _ pictureInPictureController: AVPictureInPictureController
+  ) {
+    nonisolated(unsafe) let pictureInPictureController = pictureInPictureController
+    pipMainActorSync { [weak self] in
+      self?.originalDelegate?
+        .pictureInPictureControllerDidStartPictureInPicture?(pictureInPictureController)
+    }
+  }
+
+  nonisolated func pictureInPictureControllerWillStopPictureInPicture(
+    _ pictureInPictureController: AVPictureInPictureController
+  ) {
+    nonisolated(unsafe) let pictureInPictureController = pictureInPictureController
+    pipMainActorSync { [weak self] in
+      self?.originalDelegate?
+        .pictureInPictureControllerWillStopPictureInPicture?(pictureInPictureController)
+    }
+  }
+
+  nonisolated func pictureInPictureControllerDidStopPictureInPicture(
+    _ pictureInPictureController: AVPictureInPictureController
+  ) {
+    nonisolated(unsafe) let pictureInPictureController = pictureInPictureController
+    pipMainActorSync { [weak self] in
+      self?.originalDelegate?
+        .pictureInPictureControllerDidStopPictureInPicture?(pictureInPictureController)
+    }
+  }
+
+  nonisolated func pictureInPictureController(
+    _ pictureInPictureController: AVPictureInPictureController,
+    failedToStartPictureInPictureWithError error: Error
+  ) {
+    nonisolated(unsafe) let pictureInPictureController = pictureInPictureController
+    pipMainActorSync { [weak self] in
+      self?.originalDelegate?.pictureInPictureController?(
+        pictureInPictureController,
+        failedToStartPictureInPictureWithError: error
+      )
+    }
+  }
+
+  nonisolated func pictureInPictureController(
+    _: AVPictureInPictureController,
+    restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping @Sendable (Bool) -> Void
+  ) {
+    pipMainActorSync { [weak self] in
+      guard let self, let backend else {
+        completionHandler(false)
+        return
+      }
+      backend.restoreUserInterface(
+        generation: generation,
+        completion: completionHandler
+      )
+    }
+  }
+}
+
 /// Thread-safe identity for work originating in libVLC's native PiP
 /// callbacks. The drawable callbacks arrive off-main and can remain queued
 /// while the SwiftUI view detaches, reattaches, or receives a replacement
@@ -596,6 +684,7 @@ final class IOSNativePiPBackend: NSObject, @unchecked Sendable {
   private var possibleObservation: NSKeyValueObservation?
   private var activeObservation: NSKeyValueObservation?
   private var stateChangeEventHandler: IOSNativePiPStateChangeEventHandler?
+  private var delegateProxy: IOSNativePiPDelegateProxy?
 
   private(set) var isPossible = false
   private(set) var isActive = false
@@ -750,6 +839,9 @@ final class IOSNativePiPBackend: NSObject, @unchecked Sendable {
   }
 
   private func clearWindowController() {
+    if avPictureInPictureController?.delegate === delegateProxy {
+      avPictureInPictureController?.delegate = delegateProxy?.originalDelegate
+    }
     if
       let windowController,
       windowController.responds(to: IOSNativePiPSelector.setStateChangeEventHandler) {
@@ -759,6 +851,7 @@ final class IOSNativePiPBackend: NSObject, @unchecked Sendable {
     activeObservation = nil
     avPictureInPictureController = nil
     stateChangeEventHandler = nil
+    delegateProxy = nil
     windowController = nil
   }
 
@@ -788,6 +881,13 @@ final class IOSNativePiPBackend: NSObject, @unchecked Sendable {
     guard let avController = controller.value(forKey: "avPipController") as? AVPictureInPictureController else { return }
 
     avPictureInPictureController = avController
+    let delegateProxy = IOSNativePiPDelegateProxy(
+      originalDelegate: avController.delegate,
+      backend: self,
+      generation: generation
+    )
+    self.delegateProxy = delegateProxy
+    avController.delegate = delegateProxy
     avController.requiresLinearPlayback = requiresLinearPlayback
     avController.canStartPictureInPictureAutomaticallyFromInline =
       startsAutomaticallyFromInline
@@ -819,6 +919,25 @@ final class IOSNativePiPBackend: NSObject, @unchecked Sendable {
         }
       }
     }
+  }
+
+  func restoreUserInterface(
+    generation: IOSNativePiPCallbackGenerations.ReadyCallback,
+    completion: @escaping @MainActor (Bool) -> Void
+  ) {
+    guard callbackGenerations.isCurrent(generation) else {
+      completion(false)
+      return
+    }
+    guard let owner else {
+      completion(false)
+      return
+    }
+    guard let onRestoreUserInterface = owner.onRestoreUserInterface else {
+      completion(true)
+      return
+    }
+    onRestoreUserInterface(completion)
   }
 
   private func performWindowControllerAction(_ selector: Selector) {

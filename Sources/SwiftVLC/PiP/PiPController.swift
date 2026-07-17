@@ -260,8 +260,8 @@ public final class PiPController: NSObject {
   ///
   /// If this is `nil`, restoration completes immediately.
   ///
-  /// - Note: iOS sample-buffer PiP only. On platforms/backends without a
-  ///   restore affordance this is never called.
+  /// - Note: iOS PiP only. On platforms without a restore affordance this is
+  ///   never called.
   @PerceptionIgnored
   public var onRestoreUserInterface: (@MainActor (@escaping @MainActor (Bool) -> Void) -> Void)?
 
