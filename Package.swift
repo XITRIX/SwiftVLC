@@ -4,7 +4,7 @@ import PackageDescription
 
 let package = Package(
   name: "SwiftVLC",
-  platforms: [.iOS(.v18), .macOS(.v15), .tvOS(.v18), .visionOS(.v2), .macCatalyst(.v18)],
+  platforms: [.iOS(.v16), .macOS(.v15), .tvOS(.v18), .visionOS(.v2), .macCatalyst(.v18)],
   products: [
     .library(name: "SwiftVLC", targets: ["SwiftVLC"])
   ],
@@ -13,7 +13,8 @@ let package = Package(
     .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.6"),
     // Test-only. Produces diff-style failure messages for struct/enum
     // comparisons, replacing Swift Testing's "true vs false" default.
-    .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.3")
+    .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.3"),
+    .package(url: "https://github.com/pointfreeco/swift-perception", from: "2.0.10")
   ],
   targets: [
     .binaryTarget(
@@ -61,7 +62,10 @@ let package = Package(
     ),
     .target(
       name: "SwiftVLC",
-      dependencies: ["CLibVLC"],
+      dependencies: [
+        "CLibVLC",
+        .product(name: "Perception", package: "swift-perception")
+      ],
       swiftSettings: [
         .swiftLanguageMode(.v6),
         // Upcoming features that become default in Swift 7 — opt-in early

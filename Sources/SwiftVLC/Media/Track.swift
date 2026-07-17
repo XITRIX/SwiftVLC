@@ -92,7 +92,7 @@ public struct Track: Sendable, Identifiable, Hashable {
       !payload.isEmpty,
       payload.allSatisfy({ $0 >= 0x20 && $0 < 0x7F })
     else { return nil }
-    return String(validating: payload, as: UTF8.self)
+    return String(decoding: payload, as: UTF8.self)
   }
 
   public static func == (lhs: Track, rhs: Track) -> Bool {

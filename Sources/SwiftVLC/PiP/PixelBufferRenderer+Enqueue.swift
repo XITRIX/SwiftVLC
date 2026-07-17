@@ -175,13 +175,23 @@ struct PixelBufferDisplayLayerAPI: @unchecked Sendable {
   let enqueue: (AVSampleBufferDisplayLayer, CMSampleBuffer) -> Void
 
   static var live: Self {
-    Self(
-      status: { $0.sampleBufferRenderer.status },
-      requiresFlush: { $0.sampleBufferRenderer.requiresFlushToResumeDecoding },
-      flush: { $0.sampleBufferRenderer.flush() },
-      isReadyForMoreMediaData: { $0.sampleBufferRenderer.isReadyForMoreMediaData },
-      enqueue: { $0.sampleBufferRenderer.enqueue($1) }
-    )
+    if #available(iOS 17.0, *) {
+      Self(
+        status: { $0.sampleBufferRenderer.status },
+        requiresFlush: { $0.sampleBufferRenderer.requiresFlushToResumeDecoding },
+        flush: { $0.sampleBufferRenderer.flush() },
+        isReadyForMoreMediaData: { $0.sampleBufferRenderer.isReadyForMoreMediaData },
+        enqueue: { $0.sampleBufferRenderer.enqueue($1) }
+      )
+    } else {
+      Self(
+        status: { $0.status },
+        requiresFlush: { $0.requiresFlushToResumeDecoding },
+        flush: { $0.flush() },
+        isReadyForMoreMediaData: { $0.isReadyForMoreMediaData },
+        enqueue: { $0.enqueue($1) }
+      )
+    }
   }
 }
 

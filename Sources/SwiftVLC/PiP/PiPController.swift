@@ -2,7 +2,7 @@
 #if os(iOS) || os(macOS)
 import AVFoundation
 import AVKit
-import Observation
+import Perception
 import Synchronization
 
 /// Controls Picture-in-Picture playback for a ``Player``.
@@ -23,7 +23,7 @@ import Synchronization
 /// yourContainerView.layer.addSublayer(controller.layer)
 /// controller.start()
 /// ```
-@Observable
+@Perceptible
 @MainActor
 public final class PiPController: NSObject {
   /// Whether the macOS PiP backend may use Apple's private
@@ -51,14 +51,12 @@ public final class PiPController: NSObject {
   /// `refreshPossible()` (each `attach`/`start` call).
   @_spi(PrivateMacOSPiP)
   public nonisolated static var allowsPrivateMacOSAPI: Bool {
-    get { allowsPrivateMacOSAPIStorage.load(ordering: .acquiring) }
-    set { allowsPrivateMacOSAPIStorage.store(newValue, ordering: .releasing) }
+    get { allowsPrivateMacOSAPIStorage.withLock { $0 } }
+    set { allowsPrivateMacOSAPIStorage.withLock { $0 = newValue } }
   }
 
-  /// Backing storage for ``allowsPrivateMacOSAPI``. `Atomic<Bool>` from
-  /// `Synchronization` so reads/writes are well-defined under strict
-  /// concurrency without taking a Mutex on every check.
-  private nonisolated static let allowsPrivateMacOSAPIStorage = Atomic<Bool>(false)
+  /// Lock-protected backing storage for ``allowsPrivateMacOSAPI``.
+  private nonisolated static let allowsPrivateMacOSAPIStorage = Mutex(false)
 
   struct PlaybackDriver {
     struct PauseAttempt {
@@ -119,19 +117,19 @@ public final class PiPController: NSObject {
     }
   }
 
-  @ObservationIgnored
+  @PerceptionIgnored
   let player: Player
-  @ObservationIgnored
+  @PerceptionIgnored
   let playbackDriver: PlaybackDriver
-  @ObservationIgnored
+  @PerceptionIgnored
   let pauseDebounce: Duration
   #if DEBUG
-  @ObservationIgnored
+  @PerceptionIgnored
   var _deferredPauseRetryHookForTesting: (() -> Void)?
   #endif
-  @ObservationIgnored
+  @PerceptionIgnored
   let renderer: PixelBufferRenderer
-  @ObservationIgnored
+  @PerceptionIgnored
   private let displayLayer: AVSampleBufferDisplayLayer
   /// Holds the playback-delegate proxy for the lifetime of the
   /// controller. The `AVPictureInPictureController.ContentSource` also
@@ -143,64 +141,64 @@ public final class PiPController: NSObject {
   /// AVKit-initiated delegate callbacks that may run off the main
   /// actor. Assigned once in `init`; the stored reference is
   /// effectively immutable afterwards.
-  @ObservationIgnored
+  @PerceptionIgnored
   nonisolated let playbackDelegateProxy: PiPPlaybackDelegateProxy
-  @ObservationIgnored
+  @PerceptionIgnored
   var pipController: AVPictureInPictureController?
-  @ObservationIgnored
+  @PerceptionIgnored
   var callbackRegistration: DirectPiPVideoCallbackRegistration?
-  @ObservationIgnored
+  @PerceptionIgnored
   private var didInvalidateForLifecycleEnd = false
-  @ObservationIgnored
+  @PerceptionIgnored
   var controlTimebase: CMTimebase? {
     didSet { refreshCallbackSnapshot() }
   }
 
   /// What AVKit's synchronous callbacks read instead of blocking on the main
   /// actor. See ``PiPCallbackSnapshot``.
-  @ObservationIgnored
+  @PerceptionIgnored
   nonisolated let callbackSnapshot = Mutex(PiPCallbackSnapshot())
-  @ObservationIgnored
+  @PerceptionIgnored
   var stateObserverTask: Task<Void, Never>?
   /// The state observer's second subscription. See ``startStateObserver()``
   /// for why it needs one per lane rather than one merged stream.
-  @ObservationIgnored
+  @PerceptionIgnored
   var timingObserverTask: Task<Void, Never>?
   /// Effective-rate resolutions use a dedicated provenance-bearing stream so
   /// they do not expand PlayerEvent's source-exhaustive public surface.
-  @ObservationIgnored
+  @PerceptionIgnored
   var effectivePlaybackRateObserverTask: Task<Void, Never>?
   /// The state observer's rolling view of duration and seekability.
   ///
   /// Owned by the controller rather than by an observer task because both lane
   /// tasks feed it. Both are `@MainActor`, so they serialize on this actor and
   /// interleave between events rather than racing within one.
-  @ObservationIgnored
+  @PerceptionIgnored
   var playbackStateObservation = PlaybackStateObservationState(duration: nil, isSeekable: false)
   /// Counts raw capability callbacks rejected by this controller's independent
   /// event subscriptions while the qualification suppression seam is active.
-  @ObservationIgnored
+  @PerceptionIgnored
   var playbackStateEventSuppression = PlaybackStateEventSuppression()
   /// Last native-active and rate values the observer acted on, for the same
   /// reason: the comparison has to survive across events from either lane.
-  @ObservationIgnored
+  @PerceptionIgnored
   var lastObservedNativeActive = false
-  @ObservationIgnored
+  @PerceptionIgnored
   var lastObservedRate: Float = 1.0
-  @ObservationIgnored
+  @PerceptionIgnored
   private var playbackIntentObserverTask: Task<Void, Never>?
-  @ObservationIgnored
+  @PerceptionIgnored
   private var possibleObservation: NSKeyValueObservation?
-  @ObservationIgnored
+  @PerceptionIgnored
   private var activeObservation: NSKeyValueObservation?
   #if os(iOS)
   /// Internal, not private: the validation-harness SPI in
   /// PiPController+Validation.swift probes the backend's wiring.
-  @ObservationIgnored
+  @PerceptionIgnored
   var nativeBackend: IOSNativePiPBackend?
   #endif
   #if os(macOS)
-  @ObservationIgnored
+  @PerceptionIgnored
   var nativeBackend: MacNativePiPBackend?
   #endif
 
@@ -208,7 +206,7 @@ public final class PiPController: NSObject {
   /// the background while this controller's video is playing inline.
   /// Set by ``PiPVideoView``'s `startsAutomaticallyFromInline` knob;
   /// the direct public ``init(player:)`` path uses `true`.
-  @ObservationIgnored
+  @PerceptionIgnored
   let startsAutomaticallyFromInline: Bool
 
   /// Whether this controller configures and activates the shared
@@ -227,45 +225,45 @@ public final class PiPController: NSObject {
   /// start before the managed session is ready. When `false`, this controller
   /// never touches the session; bundled libVLC continues to follow the
   /// instance policy.
-  @ObservationIgnored
+  @PerceptionIgnored
   let managesAudioSession: Bool
 
   /// Records an applied, source-compatible legacy PiP controller override that
   /// differs from the immutable instance policy. This makes the transitional
   /// split explicit and testable; it does not claim that bundled libVLC adopted
   /// the controller-local value.
-  @ObservationIgnored
+  @PerceptionIgnored
   let audioSessionPolicyDiagnostic: AppleAudioSessionPolicyDiagnostic?
 
   /// Optional operation used to test the deferred audio-session activation
   /// state machine without mutating process-wide audio state. Production
   /// controllers leave this nil and acquire the player's unique native broker
   /// lease instead.
-  @ObservationIgnored
+  @PerceptionIgnored
   let audioSessionActivation: (@MainActor () throws -> Void)?
 
   /// Whether the latest deferred `AVAudioSession.setActive(true)` succeeded.
   /// The latch is cleared after interruptions, media-services loss, and
   /// lifecycle suspension so recovery never trusts an invalid session.
-  @ObservationIgnored
+  @PerceptionIgnored
   var hasActivatedAudioSession = false
 
   /// Notification tokens for the managed session's disruption observers.
   /// Empty when ``managesAudioSession`` is `false` — nothing is observed
   /// because nothing may be changed. See `startAudioSessionObservers()`.
-  @ObservationIgnored
+  @PerceptionIgnored
   var audioSessionObservers: [any NSObjectProtocol] = []
 
   /// Delays the background-without-PiP decision long enough for AVKit's
   /// automatic PiP transition to settle. Cancelled when PiP becomes active or
   /// the app returns to the foreground.
-  @ObservationIgnored
+  @PerceptionIgnored
   var audioSessionBackgroundPauseTask: Task<Void, Never>?
 
   /// Tracks UIKit lifecycle independently of PiP activity. If PiP stops while
   /// the app is still backgrounded, managed playback must not continue as
   /// hidden audio indefinitely.
-  @ObservationIgnored
+  @PerceptionIgnored
   var isApplicationInBackground = false
 
   /// True only when SwiftVLC paused native playback for device/app lifecycle
@@ -298,55 +296,55 @@ public final class PiPController: NSObject {
   /// Broadcasts ``PiPEvent``s to every ``pipEvents`` subscriber.
   /// Terminated in deinit so subscribers' streams finish with the
   /// controller.
-  @ObservationIgnored
+  @PerceptionIgnored
   let pipEventBroadcaster = Broadcaster<PiPEvent>()
-  @ObservationIgnored
+  @PerceptionIgnored
   let pipEventEnvelopeBroadcaster = Broadcaster<PiPEventEnvelope>()
   #if os(iOS)
-  @ObservationIgnored
+  @PerceptionIgnored
   let pipContinuityEventBroadcaster = Broadcaster<PiPContinuityEvent>()
   #endif
-  @ObservationIgnored
+  @PerceptionIgnored
   let pipSnapshotBroadcaster = Broadcaster<PiPSnapshot>()
   /// Lossless qualification-only record of every control-timebase write.
   /// Clock snapshots can be sampled; corrections cannot, because several can
   /// occur between two polls during a transition.
-  @ObservationIgnored
+  @PerceptionIgnored
   nonisolated let timebaseCorrectionBroadcaster = Broadcaster<PiPTimebaseCorrection>()
-  @ObservationIgnored
+  @PerceptionIgnored
   var timebaseCorrectionSequence: UInt64 = 0
-  @ObservationIgnored
+  @PerceptionIgnored
   private var pipSnapshotRevision: UInt64 = 0
   /// Advances every time a new `AVPictureInPictureController` is installed, so
   /// a snapshot can say which controller its flags describe and a late callback
   /// from a replaced one can be told apart from a current one.
-  @ObservationIgnored
+  @PerceptionIgnored
   private(set) var pipControllerGeneration: UInt64 = 0
   /// Monotonic identity for start attempts within this controller. Controller
   /// generation alone cannot order two overlapping requests issued to the
   /// same AVKit controller.
-  @ObservationIgnored
+  @PerceptionIgnored
   var pipLifecycleSequence: UInt64 = 0
   /// Identity captured when the current PiP lifecycle began. Kept until its
   /// terminal `didStop`, so a delayed callback remains attributable after the
   /// player has already adopted another media.
-  @ObservationIgnored
+  @PerceptionIgnored
   var pipLifecycleAttribution: PiPLifecycleAttribution?
   /// Failed starts can each be followed by a trailing stop after newer starts
   /// have already been accepted. Keep their identities and stop reasons in
   /// accepted-start order outside the current lifecycle, so consuming an old
   /// stop cannot relabel or clear a retry. A later terminal start outcome
   /// retires only older failures for which AVKit never promised a stop.
-  @ObservationIgnored
+  @PerceptionIgnored
   var failedPiPLifecycles: [FailedPiPLifecycle] = []
   /// A start accepted while an older lifecycle is still waiting for its stop.
   /// Promoted only after that stop is consumed.
-  @ObservationIgnored
+  @PerceptionIgnored
   var queuedPiPStartAttribution: PiPLifecycleAttribution?
   /// Which part of the attributed PiP lifecycle is in flight. This prevents a
   /// redundant accepted start from stealing an active lifecycle while still
   /// allowing a fresh request after a terminal start failure.
-  @ObservationIgnored
+  @PerceptionIgnored
   var pipLifecycleAttributionPhase: PiPLifecycleAttributionPhase = .idle
 
   /// The best-known reason for an in-flight PiP stop, recorded by the
@@ -354,7 +352,7 @@ public final class PiPController: NSObject {
   /// programmatic ``stop()``) and consumed by the stop delegate
   /// callbacks. `nil` when no discriminating signal has been observed;
   /// see ``PiPController/pipEvents`` for the resolution rules.
-  @ObservationIgnored
+  @PerceptionIgnored
   var pendingStopReason: PiPStopCause?
 
   /// Playback state as PiP sees it. Updated synchronously in
@@ -363,7 +361,7 @@ public final class PiPController: NSObject {
   /// the answer is consistent without waiting for VLC's async state
   /// transitions. PiP queries state immediately after calling
   /// `setPlaying` and would otherwise see stale values.
-  @ObservationIgnored
+  @PerceptionIgnored
   var pipPlaybackActive: Bool = false {
     didSet { refreshCallbackSnapshot() }
   }
@@ -373,7 +371,7 @@ public final class PiPController: NSObject {
   /// previous state, so the event observer must not overwrite
   /// `pipPlaybackActive` until native playback reaches the requested
   /// state or exits playback entirely.
-  @ObservationIgnored
+  @PerceptionIgnored
   var pendingPiPPlaybackState: Bool?
 
   /// State of the deferred-pause debouncer.
@@ -385,7 +383,7 @@ public final class PiPController: NSObject {
   /// and cancel it if AVKit settles back to playing. The generation
   /// counter rides inside `.scheduled` so a late-firing wake-up from
   /// a cancelled task can detect that it is stale and exit cleanly.
-  @ObservationIgnored
+  @PerceptionIgnored
   var deferredPause: DeferredPauseState = .idle
 
   /// How a deferred PiP pause finished.
@@ -417,7 +415,7 @@ public final class PiPController: NSObject {
   /// invokes app callbacks before the synthesized setter body, so an observer
   /// can synchronously start or cancel a newer attempt while an older result is
   /// still suspended at that boundary.
-  @ObservationIgnored
+  @PerceptionIgnored
   var deferredPauseOutcomePublicationRevision: UInt64 = 0
 
   /// Publishes an outcome and returns the exact revision when this call still
@@ -476,12 +474,12 @@ public final class PiPController: NSObject {
   /// Timestamp of the last PiP skip. The observer uses this to avoid
   /// overwriting the skip handler's timebase position with stale
   /// `currentTime` data that hasn't caught up to the seek yet.
-  @ObservationIgnored
+  @PerceptionIgnored
   var lastSkipTimestamp: CFAbsoluteTime = 0
   /// Number of AVKit skips still waiting for a terminal native seek outcome.
   /// Overlapping requests are counted so completion of a superseded request
   /// cannot re-enable timebase retracking while its successor is still pending.
-  @ObservationIgnored
+  @PerceptionIgnored
   var pendingSkipCount = 0
 
   /// Whether PiP can be started right now.
@@ -494,7 +492,7 @@ public final class PiPController: NSObject {
 
   /// Exact ownership for ``isPossible`` publication across Observation's
   /// synchronous callback boundary.
-  @ObservationIgnored
+  @PerceptionIgnored
   var possiblePublicationRevision: UInt64 = 0
 
   /// Whether a PiP window is currently visible.
@@ -502,7 +500,7 @@ public final class PiPController: NSObject {
 
   /// Exact ownership for ``isActive`` publication across Observation's
   /// synchronous callback boundary.
-  @ObservationIgnored
+  @PerceptionIgnored
   var activePublicationRevision: UInt64 = 0
 
   /// Invoked when the user taps the PiP window's **restore** affordance
@@ -527,7 +525,7 @@ public final class PiPController: NSObject {
   ///
   /// - Note: iOS sample-buffer PiP only. On platforms/backends without a
   ///   restore affordance this is never called.
-  @ObservationIgnored
+  @PerceptionIgnored
   public var onRestoreUserInterface: (@MainActor (@escaping @MainActor (Bool) -> Void) -> Void)?
 
   /// The layer that renders video frames for both the inline and PiP

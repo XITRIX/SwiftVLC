@@ -1,11 +1,11 @@
 import CLibVLC
 import Foundation
-import Observation
+import Perception
 import Synchronization
 
 /// An observable media player.
 ///
-/// `Player` wraps `libvlc_media_player_t` with `@Observable` and
+/// `Player` wraps `libvlc_media_player_t` with `@Perceptible` and
 /// `@MainActor`, so SwiftUI views update in response to libVLC state
 /// without a publisher adapter.
 ///
@@ -13,7 +13,7 @@ import Synchronization
 /// and the track lists) are fed by an internal event consumer. No
 /// delegate protocols, Combine publishers, or manual bridging are
 /// involved.
-@Observable
+@Perceptible
 @MainActor
 public final class Player {
   // MARK: - Observable State
@@ -111,16 +111,16 @@ public final class Player {
 
   // MARK: - Internal
 
-  @ObservationIgnored
+  @PerceptionIgnored
   nonisolated(unsafe) var pointer: OpaquePointer // libvlc_media_player_t*
-  @ObservationIgnored
+  @PerceptionIgnored
   var nativeHandleLifetime: NativePlayerHandleLifetime
   #if os(iOS) || os(macOS)
-  @ObservationIgnored
+  @PerceptionIgnored
   weak var directPiPVideoCallbackRegistration: DirectPiPVideoCallbackRegistration?
-  @ObservationIgnored
+  @PerceptionIgnored
   var directPiPVideoCallbackSlot: DirectPiPVideoCallbackSlot?
-  @ObservationIgnored
+  @PerceptionIgnored
   var directPiPVideoCallbackGeneration: UInt64 = 0
   #endif
   let eventBridge: EventBridge
@@ -154,33 +154,33 @@ public final class Player {
   #if os(iOS) || os(macOS)
   /// Consumers caching the native handle for lock-free callback reads. See
   /// ``NativeHandleSnapshotObserver``.
-  @ObservationIgnored
+  @PerceptionIgnored
   var nativeHandleSnapshotObservers: [WeakNativeHandleSnapshotObserver] = []
   #endif
 
   /// Set while a multi-property capability change is in progress, so the
   /// per-property `didSet` publishes do not expose an intermediate mix of the
   /// outgoing and incoming media. See ``resetMediaDerivedState()``.
-  @ObservationIgnored var isSuppressingCapabilityPublish = false
+  @PerceptionIgnored var isSuppressingCapabilityPublish = false
   /// Qualification-only fault injection that drops raw length and seekability
   /// events while leaving native polling active. This proves PiP capability
   /// convergence does not depend on callbacks libVLC may omit in production.
-  @ObservationIgnored var isSuppressingRawCapabilityEvents = false
-  @ObservationIgnored var suppressedRawLengthEventCount = 0
-  @ObservationIgnored var suppressedRawSeekableEventCount = 0
-  @ObservationIgnored var eventTask: Task<Void, Never>?
-  @ObservationIgnored var playbackHealthSamplingTask: Task<Void, Never>?
-  @ObservationIgnored var playbackHealthMonitoringState = PlaybackHealthMonitoringState()
+  @PerceptionIgnored var isSuppressingRawCapabilityEvents = false
+  @PerceptionIgnored var suppressedRawLengthEventCount = 0
+  @PerceptionIgnored var suppressedRawSeekableEventCount = 0
+  @PerceptionIgnored var eventTask: Task<Void, Never>?
+  @PerceptionIgnored var playbackHealthSamplingTask: Task<Void, Never>?
+  @PerceptionIgnored var playbackHealthMonitoringState = PlaybackHealthMonitoringState()
   /// Exact ownership of one playback-health publication. Generation and
   /// native-handle identity reject media replacement, while this revision
   /// rejects a newer same-generation sample published from Observation's
   /// synchronous `onChange` callback.
-  @ObservationIgnored var playbackHealthPublicationRevision: UInt64 = 0
-  @ObservationIgnored var _position: Double = 0
-  @ObservationIgnored var _equalizer: Equalizer?
-  @ObservationIgnored var _volume: Float = 1.0
-  @ObservationIgnored var _isMuted: Bool = false
-  @ObservationIgnored var _aspectRatio: AspectRatio = .default
+  @PerceptionIgnored var playbackHealthPublicationRevision: UInt64 = 0
+  @PerceptionIgnored var _position: Double = 0
+  @PerceptionIgnored var _equalizer: Equalizer?
+  @PerceptionIgnored var _volume: Float = 1.0
+  @PerceptionIgnored var _isMuted: Bool = false
+  @PerceptionIgnored var _aspectRatio: AspectRatio = .default
   enum PauseTransition {
     case pausing
     case resuming
@@ -194,7 +194,7 @@ public final class Player {
   /// Latest explicit transport intent. Unlike a generation-scoped deferred
   /// command, this survives a native playlist boundary so adoption can carry
   /// a pause or resume that raced with the media switch.
-  @ObservationIgnored
+  @PerceptionIgnored
   var playbackControlIntent: DeferredPauseCommand? {
     didSet { playbackControlIntentRevision &+= 1 }
   }
@@ -202,26 +202,26 @@ public final class Player {
   /// Monotonic identity of the latest explicit transport command. PiP uses
   /// this to retire only the pause it owns without erasing a newer app command
   /// that happens to target the same media generation.
-  @ObservationIgnored
+  @PerceptionIgnored
   var playbackControlIntentRevision: UInt64 = 0
   /// Exact ownership of the two public playback-intent notifications. This is
   /// distinct from `playbackControlIntentRevision`: native reconciliation and
   /// media reset also publish intent, and either can synchronously re-enter a
   /// newer command through Observation.
-  @ObservationIgnored var playbackIntentPublicationRevision: UInt64 = 0
-  @ObservationIgnored var intentRevisions = PlayerIntentRevisions()
+  @PerceptionIgnored var playbackIntentPublicationRevision: UInt64 = 0
+  @PerceptionIgnored var intentRevisions = PlayerIntentRevisions()
   /// Storage for ``currentMedia`` is explicit so a load transaction can
   /// revalidate its playback generation *inside* Observation's synchronous
   /// mutation body. A nested `load()` from `onChange` must win instead of
   /// returning to an older synthesized setter that then overwrites it.
-  @ObservationIgnored var currentMediaStorage: Media?
+  @PerceptionIgnored var currentMediaStorage: Media?
   /// Non-nil while `load(_:)` is publishing one exact generation's media and
   /// reset state. Observation callbacks run before mutation bodies, so every
   /// native control—including `play()`—fails closed until that transaction
   /// either commits or is superseded by a nested load.
-  @ObservationIgnored var mediaPublicationGeneration: UInt64?
+  @PerceptionIgnored var mediaPublicationGeneration: UInt64?
 
-  /// `@Observable`'s synthesized setters open their own `withMutation` scope.
+  /// `@Perceptible`'s synthesized setters open their own `withMutation` scope.
   /// Generation-scoped transactions already own that scope so they must write
   /// the macro backing storage directly; otherwise a synchronously rearmed
   /// observer can run between the generation check and the nested setter body.
@@ -302,9 +302,9 @@ public final class Player {
   /// which command is current, not whether that command actually crossed the
   /// native boundary, so the controller needs this exact generation/revision
   /// pair to distinguish an issued pause from a still-pending one.
-  @ObservationIgnored
+  @PerceptionIgnored
   var lastIssuedPausePlaybackGeneration: UInt64?
-  @ObservationIgnored
+  @PerceptionIgnored
   var lastIssuedPausePlaybackControlRevision: UInt64?
 
   #if os(iOS) || os(macOS)
@@ -312,7 +312,7 @@ public final class Player {
   /// Mutation is reachable only through qualification SPI; keeping the state
   /// in the live Player path ensures Release builds exercise the same pause
   /// generation and cleanup machinery as production.
-  @ObservationIgnored
+  @PerceptionIgnored
   var qualificationPauseFault = QualificationPauseFaultState()
   #endif
 
@@ -360,34 +360,34 @@ public final class Player {
     case resumeRollback
   }
 
-  @ObservationIgnored var _pauseProbeHookForTesting: ((PauseProbeStage) -> Void)?
-  @ObservationIgnored var _nativePlaybackStateOverrideForTesting: PlayerState?
-  @ObservationIgnored var _nativeLengthOverrideForTesting: Int64?
-  @ObservationIgnored var _nativeSeekableOverrideForTesting: Bool?
-  @ObservationIgnored var _nativeVolumeOverrideForTesting: Int32?
-  @ObservationIgnored var _nativeMuteOverrideForTesting: Int32?
-  @ObservationIgnored var _nativeCanPauseOverrideForTesting: Bool?
-  @ObservationIgnored var _nativePauseSafetyOverrideForTesting: Bool?
-  @ObservationIgnored var _nativeSetRendererOverrideForTesting: ((RendererItem?) -> Int32)?
-  @ObservationIgnored var _nativeSetRendererTargetHookForTesting:
+  @PerceptionIgnored var _pauseProbeHookForTesting: ((PauseProbeStage) -> Void)?
+  @PerceptionIgnored var _nativePlaybackStateOverrideForTesting: PlayerState?
+  @PerceptionIgnored var _nativeLengthOverrideForTesting: Int64?
+  @PerceptionIgnored var _nativeSeekableOverrideForTesting: Bool?
+  @PerceptionIgnored var _nativeVolumeOverrideForTesting: Int32?
+  @PerceptionIgnored var _nativeMuteOverrideForTesting: Int32?
+  @PerceptionIgnored var _nativeCanPauseOverrideForTesting: Bool?
+  @PerceptionIgnored var _nativePauseSafetyOverrideForTesting: Bool?
+  @PerceptionIgnored var _nativeSetRendererOverrideForTesting: ((RendererItem?) -> Int32)?
+  @PerceptionIgnored var _nativeSetRendererTargetHookForTesting:
     ((OpaquePointer, RendererItem?) -> Void)?
-  @ObservationIgnored var _nativePlayOverrideForTesting: (() -> Int32)?
-  @ObservationIgnored var _nativeStopOverrideForTesting: (() -> Void)?
-  @ObservationIgnored var _recastWaitTimeoutForTesting: Duration?
+  @PerceptionIgnored var _nativePlayOverrideForTesting: (() -> Int32)?
+  @PerceptionIgnored var _nativeStopOverrideForTesting: (() -> Void)?
+  @PerceptionIgnored var _recastWaitTimeoutForTesting: Duration?
   /// Runs after replacement publication and before old-handle retirement,
   /// exposing that otherwise unschedulable ordering to deterministic tests.
-  @ObservationIgnored var _nativePlayerReplacementWillReleaseOldHandleForTesting: (() -> Void)?
-  @ObservationIgnored var _nativePlayerReplacementWillActivateForTesting: (() -> Void)?
-  @ObservationIgnored var _nativeResumeCommandOverrideForTesting: (() -> Void)?
-  @ObservationIgnored var _nativeResumeAuthorizationOverrideForTesting: ((Bool) -> Void)?
-  @ObservationIgnored var _mediaSpecificNativeDispatchHookForTesting:
+  @PerceptionIgnored var _nativePlayerReplacementWillReleaseOldHandleForTesting: (() -> Void)?
+  @PerceptionIgnored var _nativePlayerReplacementWillActivateForTesting: (() -> Void)?
+  @PerceptionIgnored var _nativeResumeCommandOverrideForTesting: (() -> Void)?
+  @PerceptionIgnored var _nativeResumeAuthorizationOverrideForTesting: ((Bool) -> Void)?
+  @PerceptionIgnored var _mediaSpecificNativeDispatchHookForTesting:
     ((MediaSpecificNativeDispatch) -> Void)?
-  @ObservationIgnored var _observableControlNativeDispatchHookForTesting:
+  @PerceptionIgnored var _observableControlNativeDispatchHookForTesting:
     ((OpaquePointer, ObservableControlNativeDispatch) -> Void)?
-  @ObservationIgnored var _seekOverridesForTesting = PlayerSeekTestOverrides()
+  @PerceptionIgnored var _seekOverridesForTesting = PlayerSeekTestOverrides()
   #endif
 
-  @ObservationIgnored var pauseTransition: PauseTransition? {
+  @PerceptionIgnored var pauseTransition: PauseTransition? {
     didSet {
       pauseTransitionPlaybackGeneration = pauseTransition == nil
         ? nil
@@ -396,8 +396,8 @@ public final class Player {
   }
 
   /// Native playback generation the in-flight transition was issued against.
-  @ObservationIgnored var pauseTransitionPlaybackGeneration: UInt64?
-  @ObservationIgnored var deferredPauseCommand: DeferredPauseCommand? {
+  @PerceptionIgnored var pauseTransitionPlaybackGeneration: UInt64?
+  @PerceptionIgnored var deferredPauseCommand: DeferredPauseCommand? {
     didSet {
       deferredPauseCommandPlaybackGeneration = deferredPauseCommand == nil
         ? nil
@@ -409,17 +409,17 @@ public final class Player {
   /// The event bridge can advance before its media-change event reaches the
   /// main actor, so this is more authoritative than `sessionGeneration` while
   /// a MediaListPlayer is opening its next item.
-  @ObservationIgnored var deferredPauseCommandPlaybackGeneration: UInt64?
+  @PerceptionIgnored var deferredPauseCommandPlaybackGeneration: UInt64?
 
   /// Managed audio lifecycle can pause the native player without changing the
   /// user's active playback intent. This ownership lives on `Player`, not on a
   /// transient PiP controller, so a same-player SwiftUI reconstruction can
   /// still recover the exact library-issued pause.
-  @ObservationIgnored var preservesPlaybackIntentForManagedAudioSuspension = false
-  @ObservationIgnored var isManagedAudioLifecycleSuspended = false
-  @ObservationIgnored var isManagedAudioMediaServicesSuspended = false
-  @ObservationIgnored var isManagedAudioResumeDeniedByInterruption = false
-  @ObservationIgnored var isManagedAudioResumePendingActivation = false
+  @PerceptionIgnored var preservesPlaybackIntentForManagedAudioSuspension = false
+  @PerceptionIgnored var isManagedAudioLifecycleSuspended = false
+  @PerceptionIgnored var isManagedAudioMediaServicesSuspended = false
+  @PerceptionIgnored var isManagedAudioResumeDeniedByInterruption = false
+  @PerceptionIgnored var isManagedAudioResumePendingActivation = false
 
   #if os(iOS)
   /// The one process-broker lease currently held for this player.
@@ -429,8 +429,8 @@ public final class Player {
   /// the predecessor through the correct owner before acquiring on the
   /// successor. Token zero is reserved by the native ABI and always means
   /// that SwiftVLC owns no managed-session claim.
-  @ObservationIgnored var managedAppleAudioSessionLease: UInt64 = 0
-  @ObservationIgnored var managedAppleAudioSessionLeaseOwner: OpaquePointer?
+  @PerceptionIgnored var managedAppleAudioSessionLease: UInt64 = 0
+  @PerceptionIgnored var managedAppleAudioSessionLeaseOwner: OpaquePointer?
   #endif
 
   /// A media-services reset invalidates the process's audio objects and also
@@ -438,21 +438,21 @@ public final class Player {
   /// boundary on the player rather than a transient PiP controller: queued
   /// native `.playing` events and controller reconstruction must not turn an
   /// old intent into a post-reset user action.
-  @ObservationIgnored var requiresFreshPlaybackIntentAfterMediaServicesReset = false
+  @PerceptionIgnored var requiresFreshPlaybackIntentAfterMediaServicesReset = false
 
   #if os(iOS)
   /// One notification subscription per player, independent of whether a PiP
   /// controller happens to exist. The player routes disruptions to one live
   /// managed controller when possible and otherwise applies the transport-
   /// safety fallback itself.
-  @ObservationIgnored
+  @PerceptionIgnored
   var managedAppleAudioSessionObservers: [any NSObjectProtocol] = []
   #endif
 
   #if os(iOS) || os(macOS)
-  @ObservationIgnored
+  @PerceptionIgnored
   let managedAppleAudioSessionControllers = NSHashTable<PiPController>.weakObjects()
-  @ObservationIgnored
+  @PerceptionIgnored
   weak var preferredManagedAppleAudioSessionController: PiPController?
   #endif
 
@@ -461,34 +461,34 @@ public final class Player {
   /// only write (color/opacity/fontSize) hits the cached entry and draws
   /// with the previous style. The `Marquee` setters briefly write a different
   /// text to bust the cache, then restore this value.
-  @ObservationIgnored var _marqueeText: String = ""
+  @PerceptionIgnored var _marqueeText: String = ""
   /// In-flight task that restores `_marqueeText` after a cache-bust write.
   /// Held on `Player` (not `Marquee`) because `Marquee` is `~Escapable`
   /// and cannot store cross-call state. A new style write cancels and
   /// replaces this task so rapid mutations collapse into a single restore
   /// scheduled from the latest write.
-  @ObservationIgnored var _marqueeRestoreTask: Task<Void, Never>?
+  @PerceptionIgnored var _marqueeRestoreTask: Task<Void, Never>?
   /// Shadows of per-player state that libVLC exposes no getter for (or
   /// whose live value can't be trusted mid-mutation). The native-handle
   /// replacement re-applies them to the fresh handle; without a shadow
   /// each silently reverts to its default on the first stop of
   /// drawable-hosted playback.
-  @ObservationIgnored var _logoFile: String?
-  @ObservationIgnored var _teletextPage: Int32?
-  @ObservationIgnored var _deinterlaceState: Int32?
-  @ObservationIgnored var _deinterlaceMode: String?
-  @ObservationIgnored var _audioOutputModule: String?
-  @ObservationIgnored var _audioOutputDevice: String?
-  @ObservationIgnored var _viewpoint: Viewpoint?
+  @PerceptionIgnored var _logoFile: String?
+  @PerceptionIgnored var _teletextPage: Int32?
+  @PerceptionIgnored var _deinterlaceState: Int32?
+  @PerceptionIgnored var _deinterlaceMode: String?
+  @PerceptionIgnored var _audioOutputModule: String?
+  @PerceptionIgnored var _audioOutputDevice: String?
+  @PerceptionIgnored var _viewpoint: Viewpoint?
   /// The list player currently driving this handle, if any. The native
   /// list player binds the raw `libvlc_media_player_t*` once, so every
   /// handle replacement must re-bind it or the list player keeps
   /// driving a released pointer.
-  @ObservationIgnored weak var attachedMediaListPlayer: MediaListPlayer?
+  @PerceptionIgnored weak var attachedMediaListPlayer: MediaListPlayer?
   /// Main-actor ABA guard for list ownership. Weak identity can become nil
   /// after attach/detach and look unchanged to a suspended recast; this epoch
   /// advances on every ownership transition even when the final value is nil.
-  @ObservationIgnored var mediaListOwnershipEpoch: UInt64 = 0
+  @PerceptionIgnored var mediaListOwnershipEpoch: UInt64 = 0
   /// The platform view currently receiving video frames. Held strongly
   /// because libVLC stores the view as an unretained raw pointer in its
   /// `drawable-nsobject` variable and reads it asynchronously from the
@@ -499,19 +499,19 @@ public final class Player {
   /// pointer has been reset, and its lifetime is explicitly extended
   /// across the offloaded release so `libvlc_media_player_release` can
   /// tear down the vout before ARC releases the view.
-  @ObservationIgnored var drawable: AnyObject?
+  @PerceptionIgnored var drawable: AnyObject?
   /// The native output captures this container for one handle's lifetime.
   /// Surface changes move it; handle replacement prepares a new container.
-  @ObservationIgnored var nativeDrawableSurface: VideoSurface?
-  @ObservationIgnored var drawableOwner: ObjectIdentifier?
-  @ObservationIgnored var needsDrawableRebindForPlayback = false
-  @ObservationIgnored var nativePlayerHasHostedDrawable = false
-  @ObservationIgnored var nativePlayerNeedsReplacementBeforePlayback = false
+  @PerceptionIgnored var nativeDrawableSurface: VideoSurface?
+  @PerceptionIgnored var drawableOwner: ObjectIdentifier?
+  @PerceptionIgnored var needsDrawableRebindForPlayback = false
+  @PerceptionIgnored var nativePlayerHasHostedDrawable = false
+  @PerceptionIgnored var nativePlayerNeedsReplacementBeforePlayback = false
   /// True when ``load(_:)`` already committed the playback generation whose
   /// media is waiting for a fresh drawable-hosted native handle. The next
   /// `play()` must not mistake the retiring handle's terminal state for a
   /// cold replay and advance that generation a second time.
-  @ObservationIgnored var nativePlayerReplacementHasCommittedMediaGeneration = false
+  @PerceptionIgnored var nativePlayerReplacementHasCommittedMediaGeneration = false
   /// Whether `pointer` and its synchronous media-specific API surface describe
   /// ``currentMedia``. A drawable-safe `load(_:)` can commit the successor in
   /// Swift while deliberately leaving the retiring media on the old handle
@@ -524,9 +524,9 @@ public final class Player {
         && nativePlayerReplacementHasCommittedMediaGeneration)
   }
 
-  @ObservationIgnored var retainedDrawablesUntilNativePlayerRelease: [AnyObject] = []
-  @ObservationIgnored var selectedRenderer: RendererItem?
-  @ObservationIgnored var nativePlaybackStartWasObserved = false
+  @PerceptionIgnored var retainedDrawablesUntilNativePlayerRelease: [AnyObject] = []
+  @PerceptionIgnored var selectedRenderer: RendererItem?
+  @PerceptionIgnored var nativePlaybackStartWasObserved = false
   /// Monotonic exact-handle start history. The local bit remains as a DEBUG-
   /// friendly seam, while EventBridge is authoritative for list-driven and
   /// callback-entry starts that can precede MainActor delivery.
@@ -549,69 +549,69 @@ public final class Player {
     eventBridge.currentPlaybackGenerationHasStartedPlayback
   }
 
-  @ObservationIgnored var isTextSubtitleCaptureEnabled = false
-  @ObservationIgnored var subtitleTextNativeOperations = SubtitleTextNativeOperations.live
+  @PerceptionIgnored var isTextSubtitleCaptureEnabled = false
+  @PerceptionIgnored var subtitleTextNativeOperations = SubtitleTextNativeOperations.live
 
   /// Set synchronously by the first ``shutdown()`` caller, before it
   /// suspends, so every command issued from that point on sees a player that
   /// is already retiring.
-  @ObservationIgnored var isShutdown = false
+  @PerceptionIgnored var isShutdown = false
   /// The single teardown every ``shutdown()`` caller joins. Retained after
   /// completion so late callers still await a finished task rather than
   /// returning while an earlier teardown is mid-flight.
-  @ObservationIgnored var shutdownTask: Task<Void, Never>?
+  @PerceptionIgnored var shutdownTask: Task<Void, Never>?
   /// The in-flight ``stopAndWait()`` for one exact transport episode.
   /// Concurrent callers join only while the native handle, playback
   /// generation, and control boundary still identify that same Stop. A later
   /// Play/Resume or media adoption must create a fresh stop instead of
   /// inheriting the predecessor's eventual `Stopped` callback.
-  @ObservationIgnored var stopAndWaitOperation: PlayerStopAndWaitOperation?
-  @ObservationIgnored var nextStopAndWaitOperationID: UInt64 = 0
+  @PerceptionIgnored var stopAndWaitOperation: PlayerStopAndWaitOperation?
+  @PerceptionIgnored var nextStopAndWaitOperationID: UInt64 = 0
   /// The timeline revision established by the most recent accepted seek or
   /// media load. Clock samples stamped older than this are stale and are
   /// dropped rather than allowed to overwrite the seek target.
-  @ObservationIgnored var acceptedTimelineRevision: UInt64 = 0
+  @PerceptionIgnored var acceptedTimelineRevision: UInt64 = 0
   /// Highest callback-order barrier committed to the observable timeline.
   /// Unlike `timelineRevision`, this sequence is issued under one lock shared
   /// by raw events, watched seek landings, wrapper dispatch, and exact frames.
-  @ObservationIgnored var acceptedNativeTimelineEmissionSequence: UInt64 = 0
+  @PerceptionIgnored var acceptedNativeTimelineEmissionSequence: UInt64 = 0
   /// The only seek still allowed to publish a terminal result.
-  @ObservationIgnored var pendingSeekSettlement: PendingSeekSettlement?
+  @PerceptionIgnored var pendingSeekSettlement: PendingSeekSettlement?
   /// The single command that has crossed into libVLC's request-ID-less v4
   /// watcher. Its native ownership outlives public timeout or supersession.
-  @ObservationIgnored var activeNativeSeek: ActiveNativeSeek?
+  @PerceptionIgnored var activeNativeSeek: ActiveNativeSeek?
   /// An expired, drained episode may still submit video before its successor.
-  @ObservationIgnored var lateNativeSeekObservation: ActiveNativeSeek?
+  @PerceptionIgnored var lateNativeSeekObservation: ActiveNativeSeek?
   /// Latest accepted command waiting behind the active or externally-issued
   /// native episode. Replacements never enter VLC; only this newest command is
   /// retained for later dispatch.
-  @ObservationIgnored var queuedNativeSeek: NativeSeekCommand?
+  @PerceptionIgnored var queuedNativeSeek: NativeSeekCommand?
   /// Latest raw clock samples withheld while one dispatched wrapper episode
   /// owns the request-ID-less watcher. Its attributed landing discards them; a
   /// timeout with no successor releases the best remaining observable truth.
-  @ObservationIgnored var quarantinedSeekTimeline: QuarantinedSeekTimeline?
+  @PerceptionIgnored var quarantinedSeekTimeline: QuarantinedSeekTimeline?
   /// Highest external seek episode whose landed point was published. The
   /// monitor epoch is monotonic across attachment rotations, so delayed or
   /// duplicate MainActor deliveries can never regain timeline authority.
-  @ObservationIgnored var latestAppliedExternalSeekEpoch: UInt64 = 0
+  @PerceptionIgnored var latestAppliedExternalSeekEpoch: UInt64 = 0
   /// Highest external epoch observed by a wrapper seek that subsequently
   /// crossed into native code. A delayed external landing from that same
   /// epoch is older than the wrapper dispatch even after the wrapper settles.
-  @ObservationIgnored var latestWrapperDispatchExternalSeekEpoch: UInt64 = 0
+  @PerceptionIgnored var latestWrapperDispatchExternalSeekEpoch: UInt64 = 0
   /// Frame commands awaiting libVLC's ID-matched post-display terminal event.
   /// Kept as a FIFO so rapid taps serialize through the single native slot.
-  @ObservationIgnored var pendingFrameSteps: [PendingFrameStep] = []
+  @PerceptionIgnored var pendingFrameSteps: [PendingFrameStep] = []
   /// Requests removed from the dispatch FIFO after native cancellation lost
   /// to output commitment. Their exact terminal can settle the caller but is
   /// never allowed to overwrite a successor timeline boundary.
-  @ObservationIgnored var committedFrameStepsAwaitingTerminal:
+  @PerceptionIgnored var committedFrameStepsAwaitingTerminal:
     [UInt64: CommittedFrameStepAwaitingTerminal] = [:]
-  @ObservationIgnored var nextFrameRequestToken: UInt64 = 0
+  @PerceptionIgnored var nextFrameRequestToken: UInt64 = 0
   /// Bumped when ``recast(to:)`` is superseded so suspended work rejects stale restoration.
   /// Internal transaction identity is intentionally ignored by Observation;
   /// public consumers receive coherent generation-tagged values through
   /// ``playbackStatus``.
-  @ObservationIgnored var sessionGeneration: UInt64 = 0 {
+  @PerceptionIgnored var sessionGeneration: UInt64 = 0 {
     didSet {
       if sessionGeneration != oldValue {
         supersedePendingSeekSettlement()
@@ -631,7 +631,7 @@ public final class Player {
   /// already advanced the generation and records itself here, while one that
   /// arrives from elsewhere — a ``MediaListPlayer`` advancing the list through
   /// libVLC directly — does not match and advances it.
-  @ObservationIgnored var sessionGenerationMedia: OpaquePointer?
+  @PerceptionIgnored var sessionGenerationMedia: OpaquePointer?
   let instance: VLCInstance
 
   /// The Apple audio-session owner inherited from the ``VLCInstance`` that

@@ -1,9 +1,9 @@
 import CLibVLC
-import Observation
+@_exported import Perception
 
 /// A 10-band audio equalizer with preamp and preset support.
 ///
-/// `Equalizer` is `@Observable` and `@MainActor`. SwiftUI views that
+/// `Equalizer` is `@Perceptible` and `@MainActor`. SwiftUI views that
 /// read ``preamp`` or ``bands`` update automatically, and each attached
 /// player re-applies its audio output on every change.
 ///
@@ -13,20 +13,20 @@ import Observation
 /// try eq.setAmplification(10.0, forBand: 0)
 /// player.equalizer = eq
 /// ```
-@Observable
+@Perceptible
 @MainActor
 public final class Equalizer {
-  @ObservationIgnored
+  @PerceptionIgnored
   let pointer: OpaquePointer // libvlc_equalizer_t*
 
   /// Internal observation hook, independent of the attached players.
-  @ObservationIgnored
+  @PerceptionIgnored
   var onChange: (@MainActor () -> Void)?
   private struct Attachment {
     weak var player: Player?
   }
 
-  @ObservationIgnored private var attachments: [ObjectIdentifier: Attachment] = [:]
+  @PerceptionIgnored private var attachments: [ObjectIdentifier: Attachment] = [:]
 
   func attach(to player: Player) {
     attachments = attachments.filter { $0.value.player != nil }
@@ -53,8 +53,8 @@ public final class Equalizer {
   /// value through more than one public API. Observation calls app code before
   /// the mutation body, so a newer reentrant command must invalidate the older
   /// body before it reaches libVLC.
-  @ObservationIgnored var preampMutationRevision: UInt64 = 0
-  @ObservationIgnored var bandsMutationRevision: UInt64 = 0
+  @PerceptionIgnored var preampMutationRevision: UInt64 = 0
+  @PerceptionIgnored var bandsMutationRevision: UInt64 = 0
 
   /// Creates a new equalizer with flat (0 dB) settings.
   public init() {
