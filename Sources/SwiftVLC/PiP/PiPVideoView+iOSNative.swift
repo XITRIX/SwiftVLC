@@ -43,6 +43,7 @@ final class IOSNativePiPHostView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
+    guard drawableView.superview === self else { return }
     drawableView.frame = bounds
   }
 }

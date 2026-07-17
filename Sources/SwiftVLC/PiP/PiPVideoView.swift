@@ -19,6 +19,7 @@ import UIKit
 public struct PiPVideoView: UIViewRepresentable {
   private let player: Player
   private let controllerBinding: Binding<PiPController?>?
+  private let onSurfaceReady: ((UIView) -> Void)?
   private let startsAutomaticallyFromInline: Bool
   private let managesAudioSession: Bool
 
@@ -31,6 +32,7 @@ public struct PiPVideoView: UIViewRepresentable {
   /// - Parameters:
   ///   - player: The player whose video output to display.
   ///   - controller: Optional binding to receive the `PiPController` for external control.
+  ///   - onSurfaceReady: Optional callback with the concrete drawable view.
   ///   - startsAutomaticallyFromInline: Whether the system may start PiP
   ///     automatically when the app moves to the background while this
   ///     view's video is playing inline. Defaults to `true`. Apps that
@@ -48,11 +50,13 @@ public struct PiPVideoView: UIViewRepresentable {
   public init(
     _ player: Player,
     controller: Binding<PiPController?>? = nil,
+    onSurfaceReady: ((UIView) -> Void)? = nil,
     startsAutomaticallyFromInline: Bool = true,
     managesAudioSession: Bool = true
   ) {
     self.player = player
     controllerBinding = controller
+    self.onSurfaceReady = onSurfaceReady
     self.startsAutomaticallyFromInline = startsAutomaticallyFromInline
     self.managesAudioSession = managesAudioSession
   }
@@ -62,6 +66,7 @@ public struct PiPVideoView: UIViewRepresentable {
       startsAutomaticallyFromInline: startsAutomaticallyFromInline
     )
     container.attach(to: player)
+    onSurfaceReady?(container.drawableView)
 
     let controller = PiPController(
       player: player,
