@@ -52,7 +52,10 @@ struct PixelBufferDisplayLayerAPI: @unchecked Sendable {
         requiresFlush: { $0.requiresFlushToResumeDecoding },
         flush: { $0.flush() },
         isReadyForMoreMediaData: { $0.isReadyForMoreMediaData },
-        enqueue: { $0.enqueue($1) }
+        enqueue: {
+          let renderer: any AVQueuedSampleBufferRendering = $0
+          renderer.enqueue($1)
+        }
       )
     }
   }
