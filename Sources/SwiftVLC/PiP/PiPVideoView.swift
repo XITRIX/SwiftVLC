@@ -134,16 +134,21 @@ public struct PiPVideoView: UIViewRepresentable {
   }
 
   public static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+    let isPictureInPictureActive = coordinator.pipController?.isActive == true
     if let container = uiView as? IOSNativePiPHostView {
       container.detach()
     } else {
       coordinator.pipController?.stop()
     }
     coordinator.pipController = nil
-    // Clear any external binding so callers who observe it don't retain a
-    // stopped controller. The publisher cancels stale make/update work and
-    // clears only values this coordinator owns.
-    coordinator.clearControllerBinding()
+    // Keep the controller externally retained while its PiP window survives
+    // removal of the inline SwiftUI view. Host apps commonly dismiss their
+    // player UI after PiP starts and need this binding to restore it later.
+    // A successor representable safely replaces the binding through the
+    // ownership-checked publisher.
+    if !isPictureInPictureActive {
+      coordinator.clearControllerBinding()
+    }
   }
 
   public func makeCoordinator() -> Coordinator {
