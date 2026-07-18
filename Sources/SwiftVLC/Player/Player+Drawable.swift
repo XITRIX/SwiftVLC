@@ -1,8 +1,8 @@
 import CLibVLC
 
-#if os(macOS)
+#if os(iOS) || os(macOS)
 @MainActor
-struct MacVideoOutputRecovery {
+struct VideoOutputRecovery {
   let expectedTrackID: String
   let maximumDeselectionPolls: Int
   let playbackIsCurrent: @MainActor () -> Bool
@@ -53,7 +53,7 @@ struct MacVideoOutputRecovery {
 }
 
 @MainActor
-struct MacVideoOutputRecoveryNativeOperations {
+struct VideoOutputRecoveryNativeOperations {
   let selectedTrackID: @MainActor (OpaquePointer) -> String?
   let unselectVideoTrack: @MainActor (OpaquePointer) -> Void
   let reselectVideoTrack: @MainActor (OpaquePointer, String) -> Void
@@ -180,15 +180,23 @@ extension Player {
     needsDrawableRebindForPlayback = false
   }
 
-  #if os(macOS)
-  /// Reopens the active video output after its AppKit drawable moves between
-  /// windows. `VLCOpenGLVideoView` owns an `NSOpenGLContext` whose window
-  /// surface can become invalid when macOS destroys the old PiP window even
-  /// though decoding and audio continue. Re-selecting the same video track
-  /// rebuilds only that output against the drawable's new inline window.
+  #if os(iOS) || os(macOS)
+  /// Rebuilds the active video output after an application moves its drawable
+  /// to another display. Call this only after the drawable is attached to its
+  /// destination window and has completed layout.
+  public func refreshVideoOutputAfterDisplayMove() {
+    reopenVideoOutputAfterDrawableWindowMove()
+  }
+
+  /// Reopens the active video output after its drawable moves between windows.
+  /// The native video surface can remain bound to the display where the output
+  /// was opened even after UIKit/AppKit has reparented the drawable. Decoding
+  /// and audio then continue while the destination window stays black.
+  /// Re-selecting the same video track rebuilds only that output against the
+  /// drawable's current window.
   @discardableResult
   func reopenVideoOutputAfterDrawableWindowMove(
-    using native: MacVideoOutputRecoveryNativeOperations = .live
+    using native: VideoOutputRecoveryNativeOperations = .live
   ) -> Task<Void, Never>? {
     guard
       let media = currentMedia,
@@ -203,10 +211,10 @@ extension Player {
 
       // Track selection is processed asynchronously by libVLC. Wait for the
       // deselection to settle so selecting the same ID cannot be coalesced
-      // into a no-op that leaves the invalid OpenGL surface alive. Some VLC
+      // into a no-op that leaves the invalid video surface alive. Some VLC
       // inputs keep their vout allocated while no video track is selected, so
       // the selected-track state is the reliable acknowledgement here.
-      await MacVideoOutputRecovery(
+      await VideoOutputRecovery(
         expectedTrackID: trackID,
         playbackIsCurrent: { [weak self, weak media] in
           guard let self, let media else { return false }
