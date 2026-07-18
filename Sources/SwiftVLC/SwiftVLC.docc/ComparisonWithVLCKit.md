@@ -157,7 +157,7 @@ requirements.
 
 **Pick SwiftVLC if:**
 
-- Your project targets iOS 18+ / macOS 15+ / tvOS 18+ / visionOS 2+.
+- Your project targets iOS 16+ / macOS 15+ / tvOS 18+ / visionOS 2+.
 - You want `@Observable`, `AsyncStream`, typed throws, and strict
   concurrency without writing bridging code.
 - You're building on SwiftUI and want `VideoView(player)` to be the

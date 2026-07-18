@@ -10,23 +10,23 @@ Dependencies** and paste the repository URL; Xcode resolves the latest
 release automatically.
 
 ```
-https://github.com/harflabs/SwiftVLC.git
+https://github.com/XITRIX/SwiftVLC.git
 ```
 
 To add it from a `Package.swift` manifest, pin to the current release.
 The version string lives on the
-[releases page](https://github.com/harflabs/SwiftVLC/releases).
+[releases page](https://github.com/XITRIX/SwiftVLC/releases).
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/harflabs/SwiftVLC.git", from: "1.0.0")
+    .package(url: "https://github.com/XITRIX/SwiftVLC.git", from: "1.0.0")
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["SwiftVLC"])
 ]
 ```
 
-SwiftVLC requires Swift 6.3 with Xcode 26.4 or later and supports iOS 18,
+SwiftVLC requires Swift 6.3 with Xcode 26.4 or later and supports iOS 16,
 macOS 15, tvOS 18, visionOS 2, and Mac Catalyst 18.
 
 ## Prepare libVLC at launch

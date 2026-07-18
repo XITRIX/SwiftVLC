@@ -89,7 +89,7 @@ flowchart TB
 | **PiP** | iOS `PiPVideoView`: native drawable; direct controller: vmem → `AVSampleBufferDisplayLayer`; macOS view: native drawable behind SPI | Public iOS PiP, a public direct sample-buffer route, plus explicit private-API macOS opt-in |
 | **Thread Safety** | `Mutex<T>`, `Sendable`, `nonisolated(unsafe)` | Compile-time data race prevention |
 | **Testing** | Swift Testing framework | Modern `@Test`, `#expect`, tags, traits |
-| **Platforms** | iOS 18+, macOS 15+, tvOS 18+, visionOS 2+, Mac Catalyst 18+ | Unified SwiftUI minimum |
+| **Platforms** | iOS 16+, macOS 15+, tvOS 18+, visionOS 2+, Mac Catalyst 18+ | Per-platform minimums |
 
 ---
 
@@ -771,7 +771,7 @@ Published states (`main` and release tags) carry the remote form of the libvlc `
 ```swift
 .binaryTarget(
   name: "libvlc",
-  url: "https://github.com/harflabs/SwiftVLC/releases/download/vX.Y.Z/libvlc.xcframework.zip",
+  url: "https://github.com/XITRIX/SwiftVLC/releases/download/vX.Y.Z/libvlc.xcframework.zip",
   checksum: "<sha256>"
 )
 ```

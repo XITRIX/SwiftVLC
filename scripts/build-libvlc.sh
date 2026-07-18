@@ -23,7 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/.build-libvlc"
 OUTPUT_DIR="${REPO_ROOT}/Vendor"
-VLC_REPO="https://code.videolan.org/videolan/vlc.git"
+VLC_REPO="https://github.com/videolan/vlc.git"
 VLC_BRANCH="master"
 # Pin to a known-good commit for reproducible builds. This intentionally does
 # not track VLCKit's moving pin: newer libVLC revisions changed libvlc_time_t
@@ -53,7 +53,7 @@ BUILD_CATALYST=no
 WITH_ASSERTS=no
 
 # Keep these deployment targets in sync with Package.swift.
-SWIFTVLC_MIN_IOS="18.0"
+SWIFTVLC_MIN_IOS="16.0"
 SWIFTVLC_MIN_TVOS="18.0"
 SWIFTVLC_MIN_VISIONOS="2.0"
 SWIFTVLC_MIN_MACOS="15.0"
@@ -624,7 +624,8 @@ cd "${BUILD_DIR}"
 
 if [ ! -d "vlc" ]; then
     info "Cloning VLC from ${VLC_REPO}..."
-    git clone "${VLC_REPO}" --branch "${VLC_BRANCH}" --single-branch vlc
+    git clone "${VLC_REPO}" --branch "${VLC_BRANCH}" --single-branch \
+        --filter=blob:none --no-tags vlc
     cd vlc
     git checkout -B build "${VLC_HASH}"
     cd ..

@@ -13,7 +13,7 @@
 #
 set -euo pipefail
 
-REPO="harflabs/SwiftVLC"
+REPO="XITRIX/SwiftVLC"
 XCFW_PATH="Vendor/libvlc.xcframework"
 SHOWCASE_PROJECT="Showcase/SwiftVLCShowcase.xcodeproj/project.pbxproj"
 ZIP_NAME="libvlc.xcframework.zip"
@@ -170,7 +170,7 @@ with open(path, "r") as f:
 remote_block = f"""/* Begin XCRemoteSwiftPackageReference section */
 \t\tBA000001 /* XCRemoteSwiftPackageReference \"SwiftVLC\" */ = {{
 \t\t\tisa = XCRemoteSwiftPackageReference;
-\t\t\trepositoryURL = \"https://github.com/harflabs/SwiftVLC\";
+\t\t\trepositoryURL = \"https://github.com/XITRIX/SwiftVLC\";
 \t\t\trequirement = {{
 \t\t\t\tkind = exactVersion;
 \t\t\t\tversion = {version};
@@ -191,7 +191,7 @@ remote_pattern = re.compile(
     r'/\* Begin XCRemoteSwiftPackageReference section \*/\n'
     r'\t\tBA000001 /\* XCRemoteSwiftPackageReference "SwiftVLC" \*/ = \{\n'
     r'\t\t\tisa = XCRemoteSwiftPackageReference;\n'
-    r'\t\t\trepositoryURL = "https://github.com/harflabs/SwiftVLC";\n'
+    r'\t\t\trepositoryURL = "https://github.com/(?:harflabs|XITRIX)/SwiftVLC";\n'
     r'\t\t\trequirement = \{\n'
     r'\t\t\t\tkind = (?:upToNextMajorVersion|exactVersion);\n'
     r'\t\t\t\t(?:minimumVersion|version) = [0-9.]+;\n'
@@ -265,6 +265,45 @@ done
 if [[ ${#missing_slices[@]} -gt 0 ]]; then
   echo "Error: xcframework is missing slices: ${missing_slices[*]}" >&2
   echo "  Re-run ./scripts/build-libvlc.sh --all to build all platforms." >&2
+  exit 1
+fi
+
+# The package's platform declaration cannot make a prebuilt binary support an
+# older OS. Refuse to publish unless every object was compiled for the slice's
+# advertised deployment target (or an older one).
+deployment_failures=()
+for slice in "${EXPECTED_SLICES[@]}"; do
+  case "$slice" in
+    ios-arm64|ios-arm64_x86_64-simulator) expected_minos="16.0" ;;
+    tvos-arm64|tvos-arm64_x86_64-simulator) expected_minos="18.0" ;;
+    xros-arm64|xros-arm64_x86_64-simulator) expected_minos="2.0" ;;
+    macos-arm64_x86_64) expected_minos="15.0" ;;
+    ios-arm64_x86_64-maccatalyst) expected_minos="18.0" ;;
+    *)
+      echo "Error: no deployment target configured for xcframework slice '$slice'." >&2
+      exit 1 ;;
+  esac
+
+  library="$XCFW_PATH/$slice/libvlc.a"
+  max_minos=$(otool -l "$library" 2>/dev/null \
+    | awk '/^[[:space:]]*cmd LC_BUILD_VERSION/{flag=1; next} flag && /^[[:space:]]*minos /{print $2; flag=0}' \
+    | sort -V | tail -1)
+
+  if [[ -z "$max_minos" ]]; then
+    deployment_failures+=("$slice has no LC_BUILD_VERSION")
+    continue
+  fi
+
+  highest=$(printf '%s\n%s\n' "$max_minos" "$expected_minos" | sort -V | tail -1)
+  if [[ "$highest" != "$expected_minos" ]]; then
+    deployment_failures+=("$slice minos=$max_minos exceeds $expected_minos")
+  fi
+done
+
+if [[ ${#deployment_failures[@]} -gt 0 ]]; then
+  echo "Error: xcframework deployment-target verification failed:" >&2
+  printf '  - %s\n' "${deployment_failures[@]}" >&2
+  echo "  Rebuild all slices with ./scripts/build-libvlc.sh --clean-build --all." >&2
   exit 1
 fi
 
@@ -464,7 +503,7 @@ gh release create "$TAG" "$ZIP_PATH" \
 
 Pre-built static xcframework for libVLC 4.0.
 
-**Platforms:** iOS 18+, macOS 15+, tvOS 18+, visionOS 2+, Mac Catalyst
+**Platforms:** iOS 16+, macOS 15+, tvOS 18+, visionOS 2+, Mac Catalyst 18+
 **Size:** ${ZIP_SIZE_MB} MB (stripped)
 **Checksum:** \`$CHECKSUM\`
 
