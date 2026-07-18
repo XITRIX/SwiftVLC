@@ -6,13 +6,13 @@ import Testing
 
 extension Logic {
   @Suite(.tags(.mainActor, .async))
-  @MainActor struct MacVideoOutputRecoveryTests {
+  @MainActor struct VideoOutputRecoveryTests {
     @Test
     func `waits for deselection before restoring the expected track`() async {
       var selections: [String?] = ["video", nil, nil]
       var events: [String] = []
 
-      await MacVideoOutputRecovery(
+      await VideoOutputRecovery(
         expectedTrackID: "video",
         playbackIsCurrent: {
           events.append("current")
@@ -57,7 +57,7 @@ extension Logic {
       var selectedTrack: String? = "video"
       var reselectedTracks: [String] = []
 
-      await MacVideoOutputRecovery(
+      await VideoOutputRecovery(
         expectedTrackID: "video",
         playbackIsCurrent: { isCurrent },
         playbackState: { .playing },
@@ -83,7 +83,7 @@ extension Logic {
     func `does not restore video for terminal playback states`(state: PlayerState) async {
       var reselectedTracks: [String] = []
 
-      await MacVideoOutputRecovery(
+      await VideoOutputRecovery(
         expectedTrackID: "video",
         playbackIsCurrent: { true },
         playbackState: { state },
@@ -100,7 +100,7 @@ extension Logic {
       var selections: [String?] = [nil, "replacement"]
       var reselectedTracks: [String] = []
 
-      await MacVideoOutputRecovery(
+      await VideoOutputRecovery(
         expectedTrackID: "video",
         playbackIsCurrent: { true },
         playbackState: { .paused },
@@ -117,7 +117,7 @@ extension Logic {
       var pollCount = 0
       var reselectedTracks: [String] = []
 
-      await MacVideoOutputRecovery(
+      await VideoOutputRecovery(
         expectedTrackID: "video",
         maximumDeselectionPolls: 2,
         playbackIsCurrent: { true },
@@ -135,7 +135,7 @@ extension Logic {
 
 extension Integration {
   @Suite(.tags(.mainActor, .async))
-  @MainActor struct MacVideoOutputRecoveryIntegrationTests {
+  @MainActor struct VideoOutputRecoveryIntegrationTests {
     @Test
     func `player wrapper performs recovery through controlled native operations`() async throws {
       let player = Player(instance: TestInstance.shared)
@@ -143,7 +143,7 @@ extension Integration {
       player._setStateForTesting(state: .playing)
       var selections: [String?] = ["video", "video", nil, nil]
       var events: [String] = []
-      let native = MacVideoOutputRecoveryNativeOperations(
+      let native = VideoOutputRecoveryNativeOperations(
         selectedTrackID: { _ in
           let selection = selections.removeFirst()
           events.append("selected:\(selection ?? "none")")
@@ -184,7 +184,7 @@ extension Integration {
       let player = Player(instance: TestInstance.shared)
       try player.load(Media(url: TestMedia.twosecURL))
       var events: [String] = []
-      let native = MacVideoOutputRecoveryNativeOperations(
+      let native = VideoOutputRecoveryNativeOperations(
         selectedTrackID: { _ in
           events.append("selected:none")
           return nil
@@ -217,7 +217,7 @@ extension Integration {
     @Test
     func `live native recovery operations are safe for an inactive player`() async {
       let player = Player(instance: TestInstance.shared)
-      let native = MacVideoOutputRecoveryNativeOperations.live
+      let native = VideoOutputRecoveryNativeOperations.live
 
       #expect(native.selectedTrackID(player.pointer) == nil)
       native.unselectVideoTrack(player.pointer)
