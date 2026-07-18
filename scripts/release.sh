@@ -25,7 +25,7 @@ if [[ "${SWIFTVLC_RELEASE_SUPERVISED:-}" != "1" ]]; then
   exec python3 -B "$(dirname "$0")/release-runner.py" "$0" "$@"
 fi
 
-REPO="harflabs/SwiftVLC"
+REPO="XITRIX/SwiftVLC"
 XCFW_PATH="Vendor/libvlc.xcframework"
 SHOWCASE_PROJECT="Showcase/SwiftVLCShowcase.xcodeproj/project.pbxproj"
 ZIP_NAME="libvlc.xcframework.zip"
@@ -34,7 +34,7 @@ MAX_SIZE=$((2 * 1024 * 1024 * 1024))  # 2 GB (GitHub release asset limit)
 # Release re-runs the direct per-object metadata gate with the same five
 # deployment policies as build-libvlc.sh. Keep these values in sync with
 # Package.swift and the corresponding SWIFTVLC_MIN_* build constants.
-SWIFTVLC_MIN_IOS="18.0"
+SWIFTVLC_MIN_IOS="16.0"
 SWIFTVLC_MIN_TVOS="18.0"
 SWIFTVLC_MIN_VISIONOS="2.0"
 SWIFTVLC_MIN_MACOS="15.0"
@@ -294,7 +294,7 @@ with open(path, "r") as f:
 remote_block = f"""/* Begin XCRemoteSwiftPackageReference section */
 \t\tBA000001 /* XCRemoteSwiftPackageReference \"SwiftVLC\" */ = {{
 \t\t\tisa = XCRemoteSwiftPackageReference;
-\t\t\trepositoryURL = \"https://github.com/harflabs/SwiftVLC\";
+\t\t\trepositoryURL = \"https://github.com/XITRIX/SwiftVLC\";
 \t\t\trequirement = {{
 \t\t\t\tkind = exactVersion;
 \t\t\t\tversion = {version};
@@ -315,7 +315,7 @@ remote_pattern = re.compile(
     r'/\* Begin XCRemoteSwiftPackageReference section \*/\n'
     r'\t\tBA000001 /\* XCRemoteSwiftPackageReference "SwiftVLC" \*/ = \{\n'
     r'\t\t\tisa = XCRemoteSwiftPackageReference;\n'
-    r'\t\t\trepositoryURL = "https://github.com/harflabs/SwiftVLC";\n'
+    r'\t\t\trepositoryURL = "https://github.com/(?:harflabs|XITRIX)/SwiftVLC";\n'
     r'\t\t\trequirement = \{\n'
     r'\t\t\t\tkind = (?:upToNextMajorVersion|exactVersion);\n'
     # Pre-release identifiers carry letters and hyphens: 1.1.0-beta.1.

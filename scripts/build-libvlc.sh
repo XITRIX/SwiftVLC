@@ -78,7 +78,7 @@ PUBLISHED_ARTIFACT_REMOVAL_BINDING_CONTENT=""
 PUBLISHING_BINDING_NAME=".swiftvlc-managed-publication-binding-v1"
 PUBLISHING_BINDING_CONTENT=""
 OUTPUT_DIR="${REPO_ROOT}/Vendor"
-VLC_REPO="https://code.videolan.org/videolan/vlc.git"
+VLC_REPO="https://github.com/videolan/vlc.git"
 VLC_BRANCH="master"
 # Pin to a known-good commit for reproducible builds. This intentionally does
 # not track VLCKit's moving pin: newer libVLC revisions changed libvlc_time_t
@@ -114,7 +114,7 @@ CLEAN_BUILD=no
 CLEAN_ONLY=no
 
 # Keep these deployment targets in sync with Package.swift.
-SWIFTVLC_MIN_IOS="18.0"
+SWIFTVLC_MIN_IOS="16.0"
 SWIFTVLC_MIN_TVOS="18.0"
 SWIFTVLC_MIN_VISIONOS="2.0"
 SWIFTVLC_MIN_MACOS="15.0"
@@ -1263,7 +1263,7 @@ if [ -L vlc ]; then
     error "Refusing a symlinked VLC source directory: ${BUILD_DIR_DISPLAY}/vlc"
 elif [ ! -e vlc ]; then
     info "Cloning VLC from ${VLC_REPO}..."
-    git clone "${VLC_REPO}" --branch "${VLC_BRANCH}" --single-branch vlc
+    git clone "${VLC_REPO}" --branch "${VLC_BRANCH}" --single-branch --filter=blob:none --no-tags vlc
     VLC_SOURCE_WAS_CLONED=yes
 elif [ ! -d vlc ]; then
     error "VLC source path is not a directory: ${BUILD_DIR_DISPLAY}/vlc"
