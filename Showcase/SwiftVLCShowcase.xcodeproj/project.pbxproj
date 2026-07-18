@@ -1026,7 +1026,7 @@
 			repositoryURL = "https://github.com/XITRIX/SwiftVLC";
 			requirement = {
 				kind = exactVersion;
-				version = 1.0.0;
+				version = 1.0.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
