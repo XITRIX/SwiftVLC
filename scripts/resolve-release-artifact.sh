@@ -3,6 +3,7 @@
 set -euo pipefail
 
 REPO="harflabs/SwiftVLC"
+REPO_EXPLICIT=no
 ASSET_NAME="libvlc.xcframework.zip"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -10,11 +11,19 @@ TAG="${SWIFTVLC_RELEASE_TAG:-}"
 ALLOW_DRAFT="${SWIFTVLC_ALLOW_DRAFT_RELEASE:-}"
 
 usage() {
-  echo "Usage: $0 [--tag vX.Y.Z]" >&2
+  echo "Usage: $0 [--tag vX.Y.Z] [--repo harflabs/SwiftVLC|XITRIX/SwiftVLC]" >&2
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --repo)
+      [[ $# -ge 2 ]] || { usage; exit 2; }
+      case "$2" in
+        harflabs/SwiftVLC|XITRIX/SwiftVLC) REPO="$2"; REPO_EXPLICIT=yes ;;
+        *) echo "Error: unsupported SwiftVLC repository: $2" >&2; exit 2 ;;
+      esac
+      shift 2
+      ;;
     --tag)
       [[ $# -ge 2 ]] || { usage; exit 2; }
       TAG="$2"
@@ -39,6 +48,13 @@ if [[ -z "$TAG" ]]; then
     echo "  Supply --tag or SWIFTVLC_RELEASE_TAG when Package.swift uses a local artifact." >&2
     exit 1
   fi
+  if [[ "$REPO_EXPLICIT" == no ]]; then
+    manifest_url=$(python3 "$SCRIPT_DIR/release-artifact-info.py" Package.swift --field url)
+    case "$manifest_url" in
+      https://github.com/XITRIX/SwiftVLC/*) REPO="XITRIX/SwiftVLC" ;;
+      https://github.com/harflabs/SwiftVLC/*) REPO="harflabs/SwiftVLC" ;;
+    esac
+  fi
 fi
 
 if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
@@ -49,6 +65,18 @@ if [[ -n "$ALLOW_DRAFT" && "$ALLOW_DRAFT" != "1" ]]; then
   echo "Error: SWIFTVLC_ALLOW_DRAFT_RELEASE must be exactly 1 when enabled." >&2
   exit 1
 fi
+# A fork may consume an official artifact before publishing its replacement.
+# Fetch the tag from the artifact owner rather than assuming origin owns it.
+# Local origin URLs remain useful for isolated release-validation fixtures.
+RELEASE_REMOTE=origin
+origin_url=$(git remote get-url origin)
+case "$origin_url" in
+  https://github.com/harflabs/SwiftVLC|https://github.com/harflabs/SwiftVLC.git|\
+  https://github.com/XITRIX/SwiftVLC|https://github.com/XITRIX/SwiftVLC.git|\
+  git@github.com:harflabs/SwiftVLC.git|git@github.com:XITRIX/SwiftVLC.git)
+    RELEASE_REMOTE="https://github.com/$REPO.git" ;;
+esac
+
 CHECKOUT_COMMIT=$(git rev-parse HEAD)
 RELEASE_TAG="$TAG"
 RELEASE_REF="refs/swiftvlc-release/$TAG"
@@ -154,11 +182,11 @@ PY
 
   # A final SemVer tag before publication would make this still-draft package
   # selectable by normal SwiftPM clients. Candidate CI treats that as a P0.
-  if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+  if git ls-remote --exit-code --tags "$RELEASE_REMOTE" "refs/tags/$TAG" >/dev/null 2>&1; then
     echo "Error: final SemVer tag $TAG exists before candidate publication." >&2
     exit 1
   fi
-  REMOTE_BRANCH_COMMIT=$(git ls-remote origin "$EXPECTED_RELEASE_REF" \
+  REMOTE_BRANCH_COMMIT=$(git ls-remote "$RELEASE_REMOTE" "$EXPECTED_RELEASE_REF" \
     | awk 'NR == 1 { print $1 }')
   if [[ "$REMOTE_BRANCH_COMMIT" != "$CANDIDATE_COMMIT" ]]; then
     echo "Error: release-candidate branch does not resolve to the authenticated candidate commit." >&2
@@ -172,7 +200,7 @@ trap 'rm -rf "$temp_dir"' EXIT
 # Fetch into a private ref rather than installing release tags into the
 # checkout. Force is safe for this script-owned ref and lets a retry diagnose a
 # moved remote tag instead of silently reading stale local state.
-git fetch --quiet --force origin "refs/tags/$RELEASE_TAG:$RELEASE_REF"
+git fetch --quiet --force "$RELEASE_REMOTE" "refs/tags/$RELEASE_TAG:$RELEASE_REF"
 TAG_COMMIT=$(git rev-parse "${RELEASE_REF}^{commit}")
 if [[ "$ALLOW_DRAFT" == "1" ]]; then
   if [[ "$TAG_COMMIT" != "$CANDIDATE_COMMIT" ]]; then

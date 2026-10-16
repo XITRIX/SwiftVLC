@@ -51,7 +51,7 @@ public final class PiPController: NSObject {
   /// `refreshPossible()` (each `attach`/`start` call).
   @_spi(PrivateMacOSPiP)
   public nonisolated static var allowsPrivateMacOSAPI: Bool {
-    get { allowsPrivateMacOSAPIStorage.withLock { $0 } }
+    get { allowsPrivateMacOSAPIStorage.withLock({ $0 }) }
     set { allowsPrivateMacOSAPIStorage.withLock { $0 = newValue } }
   }
 

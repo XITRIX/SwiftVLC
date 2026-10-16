@@ -2068,13 +2068,14 @@ expected_manifest_tail = [
     "c32b25c893fc15bb105739cb1439a4af253c7394017c20ad81d8b6e3ff77675b  0052-videotoolbox-h264-seek-recovery.patch",
     "87d4c49db84f6fb85423b324d09b1de17387082fce30137f369b6f2c11adf5f8  0053-paused-seek-clock-origin.patch",
     "45edc2bbbf5d1680a416feb132d86b55ef455917d87c6271d0cb9d5c158e8f00  0054-resume-blocked-video-output.patch",
+    "da444b8f3ec8f23ce7ca31e78ae7578aa18aac020c5a00b7db402bf967b84ee1  0055-ios16-sample-buffer-renderer-compat.patch",
 ]
 if manifest_lines[-len(expected_manifest_tail):] != expected_manifest_tail:
     sys.exit(
         "patch manifest must end with frozen 0037 through 0040, native PiP "
         "output identity 0041, adaptive ES recycling 0042, then text-subtitle "
         "callback 0043, deferred-resume correction 0044, playlist policy 0045, "
-        "failure recovery 0046, LGPL2 live555 0047/0048, paused-seek clock 0049, seek video output 0050, subtitle demand 0051, H264 recovery 0052, clock origin 0053, and resume ordering 0054: "
+        "failure recovery 0046, LGPL2 live555 0047/0048, paused-seek clock 0049, seek video output 0050, subtitle demand 0051, H264 recovery 0052, clock origin 0053, resume ordering 0054, and iOS 16 renderer compatibility 0055: "
         f"got {manifest_lines[-len(expected_manifest_tail):]}"
     )
 
@@ -3160,7 +3161,7 @@ for marker in (
         sys.exit(f"release does not retain both build records: {marker}")
 
 deployment_constants = {
-    "SWIFTVLC_MIN_IOS": "18.0",
+    "SWIFTVLC_MIN_IOS": "16.0",
     "SWIFTVLC_MIN_TVOS": "18.0",
     "SWIFTVLC_MIN_VISIONOS": "2.0",
     "SWIFTVLC_MIN_MACOS": "15.0",
@@ -4524,7 +4525,7 @@ if [ "${1:-}" = build ]; then
     shift
   done
   [ -n "$package_path" ]
-  grep -Fq '.package(url: "https://github.com/harflabs/SwiftVLC.git", exact: "1.1.0")' \
+  grep -Fq '.package(url: "https://github.com/XITRIX/SwiftVLC.git", exact: "1.1.0")' \
     "$package_path/Package.swift"
   grep -Fq 'import SwiftVLC' "$package_path/Sources/SwiftVLCSmoke/main.swift"
   exit 0
@@ -4630,17 +4631,17 @@ perform_merge() {
 
 if [ "${1:-}" = api ]; then
   case " $* " in
-    *" repos/harflabs/SwiftVLC "*)
+    *" repos/XITRIX/SwiftVLC "*)
       if [ "${SWIFTVLC_RELEASE_TEST_RULESET_DRIFT:-}" = repository-merge ]; then
         allow_merge=false
       else
         allow_merge=true
       fi
-      printf '{"full_name":"harflabs/SwiftVLC","default_branch":"main","archived":false,"disabled":false,"allow_merge_commit":%s}\n' \
+      printf '{"full_name":"XITRIX/SwiftVLC","default_branch":"main","archived":false,"disabled":false,"allow_merge_commit":%s}\n' \
         "$allow_merge"
       exit 0
       ;;
-    *" repos/harflabs/SwiftVLC/pulls/17/merge "*)
+    *" repos/XITRIX/SwiftVLC/pulls/17/merge "*)
       expected=""
       merge_method=""
       method=""
@@ -4659,11 +4660,11 @@ if [ "${1:-}" = api ]; then
       perform_merge "$expected"
       exit $?
       ;;
-    *" repos/harflabs/SwiftVLC/rulesets?includes_parents=true&per_page=100 "*)
-      printf '%s\n' '[{"id":15683730,"name":"Protect main","target":"branch","source_type":"Repository","source":"harflabs/SwiftVLC","enforcement":"active"}]'
+    *" repos/XITRIX/SwiftVLC/rulesets?includes_parents=true&per_page=100 "*)
+      printf '%s\n' '[{"id":15683730,"name":"Protect main","target":"branch","source_type":"Repository","source":"XITRIX/SwiftVLC","enforcement":"active"}]'
       exit 0
       ;;
-    *" repos/harflabs/SwiftVLC/rulesets/15683730 "*)
+    *" repos/XITRIX/SwiftVLC/rulesets/15683730 "*)
       python3 - "${SWIFTVLC_RELEASE_TEST_RULESET_DRIFT:-}" <<'PY'
 import json
 import sys
@@ -4674,7 +4675,7 @@ policy = {
     "name": "Protect main",
     "target": "branch",
     "source_type": "Repository",
-    "source": "harflabs/SwiftVLC",
+    "source": "XITRIX/SwiftVLC",
     "enforcement": "active",
     "bypass_actors": [],
     "conditions": {
@@ -4740,12 +4741,12 @@ print(json.dumps(policy))
 PY
       exit 0
       ;;
-    *" repos/harflabs/SwiftVLC/immutable-releases "*)
+    *" repos/XITRIX/SwiftVLC/immutable-releases "*)
       [ "${SWIFTVLC_RELEASE_TEST_IMMUTABLE_DISABLED:-}" != 1 ] || exit 1
       printf 'true\n'
       exit 0
       ;;
-    *" --method DELETE https://api.github.com/repos/harflabs/SwiftVLC/releases/assets/"*)
+    *" --method DELETE https://api.github.com/repos/XITRIX/SwiftVLC/releases/assets/"*)
       asset_url=${!#}
       asset_name=${asset_url##*/}
       rm -f "$capture/starters/$asset_name"
@@ -4794,11 +4795,11 @@ for path in sorted((capture / "uploaded").iterdir()):
             "name": path.name,
             "digest": f"sha256:{digest}",
             "url": (
-                "https://github.com/harflabs/SwiftVLC/releases/download/"
+                "https://github.com/XITRIX/SwiftVLC/releases/download/"
                 f"{asset_locator}/{path.name}"
             ),
             "apiUrl": (
-                "https://api.github.com/repos/harflabs/SwiftVLC/"
+                "https://api.github.com/repos/XITRIX/SwiftVLC/"
                 f"releases/assets/{path.name}"
             ),
             "state": "uploaded",
@@ -4811,11 +4812,11 @@ for path in sorted((capture / "starters").iterdir()):
             "name": path.name,
             "digest": None,
             "url": (
-                "https://github.com/harflabs/SwiftVLC/releases/download/"
+                "https://github.com/XITRIX/SwiftVLC/releases/download/"
                 f"{asset_locator}/{path.name}"
             ),
             "apiUrl": (
-                "https://api.github.com/repos/harflabs/SwiftVLC/"
+                "https://api.github.com/repos/XITRIX/SwiftVLC/"
                 f"releases/assets/{path.name}"
             ),
             "state": "starter",
@@ -4826,7 +4827,7 @@ print(
     json.dumps(
         {
             "url": (
-                "https://github.com/harflabs/SwiftVLC/releases/"
+                "https://github.com/XITRIX/SwiftVLC/releases/"
                 f"tag/{release_locator}"
             ),
             "tagName": tag,
@@ -4935,7 +4936,7 @@ if [ "${1:-}" = pr ] && [ "${2:-}" = create ]; then
   /usr/bin/git --git-dir="$origin" \
     rev-parse refs/heads/release-candidates/v1.1.0 > "$pr_head"
   printf 'open\n' > "$pr_state"
-  printf 'https://github.com/harflabs/SwiftVLC/pull/17\n'
+  printf 'https://github.com/XITRIX/SwiftVLC/pull/17\n'
   exit 0
 fi
 
@@ -4974,7 +4975,7 @@ print(
                 "baseRefOid": base_path.read_text().strip(),
                 "mergedAt": "2026-09-02T00:00:00Z" if state == "merged" else None,
                 "mergeCommit": {"oid": merge} if merge else None,
-                "url": "https://github.com/harflabs/SwiftVLC/pull/17",
+                "url": "https://github.com/XITRIX/SwiftVLC/pull/17",
             }
         ]
     )

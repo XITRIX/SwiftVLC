@@ -379,10 +379,10 @@ final class DirectPiPVideoCallbackRegistration {
     renderer.beginPlaybackGeneration(playbackGeneration)
     guard slot.activate(renderer: renderer) else { return false }
     slot.context.setQualificationTelemetryEnabled(
-      renderer.contentDiagnosticsEnabled.load(ordering: .acquiring)
+      renderer.contentDiagnosticsEnabled.withLock({ $0 })
     )
     slot.context.setPresentationCopyRequired(
-      renderer.presentationCopyEnabled.load(ordering: .acquiring)
+      renderer.presentationCopyEnabled.withLock({ $0 })
     )
     current = Binding(slot: slot, generation: generation)
     return true
@@ -473,8 +473,8 @@ final class PixelBufferRendererCallbackContext: Sendable {
   }
 
   private let state: Mutex<State>
-  private let presentationCopyRequired: Atomic<Bool>
-  private let qualificationTelemetryEnabled: Atomic<Bool>
+  private let presentationCopyRequired: Mutex<Bool>
+  private let qualificationTelemetryEnabled: Mutex<Bool>
   /// Stored as bits because `OpaquePointer` is not `Sendable`. The enclosing
   /// callback context is retained only until this exact native handle joins
   /// vout teardown, so reconstructing it during an in-flight callback is safe.
@@ -490,11 +490,11 @@ final class PixelBufferRendererCallbackContext: Sendable {
     voutGenerationCounter: PixelBufferVoutGenerationCounter = PixelBufferVoutGenerationCounter()
   ) {
     state = Mutex(State(displayRenderer: renderer))
-    presentationCopyRequired = Atomic(
-      renderer.presentationCopyEnabled.load(ordering: .acquiring)
+    presentationCopyRequired = Mutex(
+      renderer.presentationCopyEnabled.withLock({ $0 })
     )
-    qualificationTelemetryEnabled = Atomic(
-      renderer.contentDiagnosticsEnabled.load(ordering: .acquiring)
+    qualificationTelemetryEnabled = Mutex(
+      renderer.contentDiagnosticsEnabled.withLock({ $0 })
     )
     nativePlayerAddress = nativePlayer.map(UInt.init(bitPattern:)) ?? 0
     self.playbackGeneration = Mutex(playbackGeneration)
@@ -586,11 +586,11 @@ final class PixelBufferRendererCallbackContext: Sendable {
   }
 
   func setQualificationTelemetryEnabled(_ enabled: Bool) {
-    qualificationTelemetryEnabled.store(enabled, ordering: .releasing)
+    qualificationTelemetryEnabled.withLock { $0 = enabled }
   }
 
   var isQualificationTelemetryEnabled: Bool {
-    qualificationTelemetryEnabled.load(ordering: .acquiring)
+    qualificationTelemetryEnabled.withLock({ $0 })
   }
 
   var qualificationMediaTimeSeconds: Double? {
@@ -605,11 +605,11 @@ final class PixelBufferRendererCallbackContext: Sendable {
   }
 
   func setPresentationCopyRequired(_ required: Bool) {
-    presentationCopyRequired.store(required, ordering: .releasing)
+    presentationCopyRequired.withLock { $0 = required }
   }
 
   var isPresentationCopyRequired: Bool {
-    presentationCopyRequired.load(ordering: .acquiring)
+    presentationCopyRequired.withLock({ $0 })
   }
 
   /// Atomically hands an already-open vout's future display callbacks to a
@@ -628,10 +628,10 @@ final class PixelBufferRendererCallbackContext: Sendable {
     }
     if accepted {
       setPresentationCopyRequired(
-        renderer?.presentationCopyEnabled.load(ordering: .acquiring) ?? false
+        renderer?.presentationCopyEnabled.withLock({ $0 }) ?? false
       )
       setQualificationTelemetryEnabled(
-        renderer?.contentDiagnosticsEnabled.load(ordering: .acquiring) ?? false
+        renderer?.contentDiagnosticsEnabled.withLock({ $0 }) ?? false
       )
     }
     return accepted
@@ -668,7 +668,7 @@ final class PixelBufferRendererCallbackContext: Sendable {
       handleOpaque: handleOpaque,
       decodeRenderer: decodeRenderer,
       sourceGeometry: sourceGeometry,
-      playbackGeneration: playbackGeneration.withLock { $0 },
+      playbackGeneration: playbackGeneration.withLock({ $0 }),
       voutGeneration: voutGeneration
     )
   }

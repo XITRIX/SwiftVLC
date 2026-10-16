@@ -1,0 +1,266 @@
+diff --git a/modules/video_output/apple/VLCPictureInPictureController.m b/modules/video_output/apple/VLCPictureInPictureController.m
+--- a/modules/video_output/apple/VLCPictureInPictureController.m
++++ b/modules/video_output/apple/VLCPictureInPictureController.m
+@@ -40,6 +40,19 @@
+ #import "VLCDrawable.h"
+ 
+ #include "vlc_pip_controller.h"
++
++// The native renderer object was introduced in iOS 17. The display layer
++// implements the same clock surface on iOS 16.
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wdeprecated-declarations"
++static CMTime DisplayLayerTime(AVSampleBufferDisplayLayer *displayLayer)
++{
++    if (@available(macOS 14.0, iOS 17.0, tvOS 17.0, visionOS 1.0, *))
++        return CMTimebaseGetTime(displayLayer.sampleBufferRenderer.timebase);
++    return CMTimebaseGetTime(displayLayer.timebase);
++}
++#pragma clang diagnostic pop
++
+ 
+ @class VLCPictureInPicturePresentationContext;
+ @class VLCPictureInPictureBinding;
+@@ -821,8 +834,7 @@
+     else if (time >= length)
+         time = length - 1;
+ 
+-    CMTime current =
+-        CMTimebaseGetTime(displayLayer.sampleBufferRenderer.timebase);
++    CMTime current = DisplayLayerTime(displayLayer);
+     if (!CMTIME_IS_NUMERIC(current))
+         current = CMClockGetTime(CMClockGetHostTimeClock());
+     CMTime start = CMTimeSubtract(current, CMTimeMake(time, 1000));
+diff --git a/modules/video_output/apple/VLCSampleBufferDisplay.m b/modules/video_output/apple/VLCSampleBufferDisplay.m
+--- a/modules/video_output/apple/VLCSampleBufferDisplay.m
++++ b/modules/video_output/apple/VLCSampleBufferDisplay.m
+@@ -111,6 +111,40 @@
+     kVLCSampleBufferPixelFlip_H = 1 << 0,
+     kVLCSampleBufferPixelFlip_V = 1 << 1,
+ };
++
++// AVSampleBufferDisplayLayer and AVSampleBufferVideoRenderer expose the
++// same queue and recovery operations. Keep all generation checks, notification
++// ownership, and flush/enqueue ordering on the selected object on both OS paths.
++@protocol SwiftVLCSampleBufferRendering <AVQueuedSampleBufferRendering>
++@property (nonatomic, readonly) AVQueuedSampleBufferRenderingStatus status;
++@property (nonatomic, readonly) BOOL requiresFlushToResumeDecoding;
++@property (nonatomic, readonly, nullable) NSError *error;
++@end
++
++static id<SwiftVLCSampleBufferRendering>
++DisplayLayerRenderer(AVSampleBufferDisplayLayer *displayLayer)
++{
++    if (@available(macOS 14.0, iOS 17.0, tvOS 17.0, visionOS 1.0, *))
++        return (id<SwiftVLCSampleBufferRendering>)displayLayer.sampleBufferRenderer;
++    return (id<SwiftVLCSampleBufferRendering>)displayLayer;
++}
++
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wdeprecated-declarations"
++static NSNotificationName DisplayLayerRequiresFlushNotification(void)
++{
++    if (@available(macOS 14.0, iOS 17.0, tvOS 17.0, visionOS 1.0, *))
++        return AVSampleBufferVideoRendererRequiresFlushToResumeDecodingDidChangeNotification;
++    return AVSampleBufferDisplayLayerRequiresFlushToResumeDecodingDidChangeNotification;
++}
++
++static NSNotificationName DisplayLayerDecodeFailureNotification(void)
++{
++    if (@available(macOS 14.0, iOS 17.0, tvOS 17.0, visionOS 1.0, *))
++        return AVSampleBufferVideoRendererDidFailToDecodeNotification;
++    return AVSampleBufferDisplayLayerFailedToDecodeNotification;
++}
++#pragma clang diagnostic pop
+ 
+ #pragma mark - VLCRotatedPixelBufferProvider
+ 
+@@ -922,7 +956,7 @@
+     @property (nonatomic) VLCView *displayClipView;
+     @property (nonatomic) VLCSampleBufferDisplayView *displayView;
+     @property (nonatomic) AVSampleBufferDisplayLayer *displayLayer;
+-    @property (nonatomic, strong) AVSampleBufferVideoRenderer *observedRenderer;
++    @property (nonatomic, strong) id<SwiftVLCSampleBufferRendering> observedRenderer;
+     @property (nonatomic, strong) id rendererRequirementObserver;
+     @property (nonatomic, strong) id rendererDecodeFailureObserver;
+     @property (nonatomic, strong) id applicationActiveObserver;
+@@ -946,21 +980,21 @@
+     + (instancetype)new NS_UNAVAILABLE;
+     - (instancetype)initWithVoutDisplay:(vout_display_t *)vd;
+     - (void)installObserversForRendererLocked:
+-        (AVSampleBufferVideoRenderer *)renderer;
+-    - (BOOL)isCurrentRendererLocked:(AVSampleBufferVideoRenderer *)renderer
++        (id<SwiftVLCSampleBufferRendering> )renderer;
++    - (BOOL)isCurrentRendererLocked:(id<SwiftVLCSampleBufferRendering> )renderer
+                          generation:(uint64_t)generation;
+     - (VLCSampleBufferRendererGateResult)prepareRendererLocked:
+-        (AVSampleBufferVideoRenderer *)renderer
++        (id<SwiftVLCSampleBufferRendering> )renderer
+         generation:(uint64_t)generation
+         context:(const char *)context
+         didFlush:(BOOL *)didFlush;
+     - (VLCSampleBufferRendererGateResult)enqueueSampleBufferLocked:
+         (CMSampleBufferRef)sampleBuffer
+-        renderer:(AVSampleBufferVideoRenderer *)renderer
++        renderer:(id<SwiftVLCSampleBufferRendering> )renderer
+         generation:(uint64_t)generation
+         requireReadiness:(BOOL)requireReadiness
+         rememberForRecovery:(BOOL)rememberForRecovery;
+-    - (void)recoverRendererLocked:(AVSampleBufferVideoRenderer *)renderer
++    - (void)recoverRendererLocked:(id<SwiftVLCSampleBufferRendering> )renderer
+                        generation:(uint64_t)generation
+                           context:(const char *)context;
+     - (void)placeVideo:(vout_display_place_t)newPlace;
+@@ -1037,17 +1071,17 @@
+     return _cropContext;
+ }
+ 
+-- (BOOL)isCurrentRendererLocked:(AVSampleBufferVideoRenderer *)renderer
++- (BOOL)isCurrentRendererLocked:(id<SwiftVLCSampleBufferRendering> )renderer
+                      generation:(uint64_t)generation
+ {
+     return !_displayClosed && renderer != nil &&
+         generation == rendererGeneration && _observedRenderer == renderer &&
+         _displayLayer != nil &&
+-        _displayLayer.sampleBufferRenderer == renderer;
++        DisplayLayerRenderer(_displayLayer) == renderer;
+ }
+ 
+ - (VLCSampleBufferRendererGateResult)prepareRendererLocked:
+-        (AVSampleBufferVideoRenderer *)renderer
++        (id<SwiftVLCSampleBufferRendering> )renderer
+         generation:(uint64_t)generation
+         context:(const char *)context
+         didFlush:(BOOL *)didFlush
+@@ -1133,7 +1167,7 @@
+ 
+ - (VLCSampleBufferRendererGateResult)enqueueSampleBufferLocked:
+         (CMSampleBufferRef)sampleBuffer
+-        renderer:(AVSampleBufferVideoRenderer *)renderer
++        renderer:(id<SwiftVLCSampleBufferRendering> )renderer
+         generation:(uint64_t)generation
+         requireReadiness:(BOOL)requireReadiness
+         rememberForRecovery:(BOOL)rememberForRecovery
+@@ -1217,7 +1251,7 @@
+     vlc_assert_unreachable();
+ }
+ 
+-- (void)recoverRendererLocked:(AVSampleBufferVideoRenderer *)renderer
++- (void)recoverRendererLocked:(id<SwiftVLCSampleBufferRendering> )renderer
+                    generation:(uint64_t)generation
+                       context:(const char *)context
+ {
+@@ -1251,7 +1285,7 @@
+ }
+ 
+ - (void)installObserversForRendererLocked:
+-        (AVSampleBufferVideoRenderer *)renderer
++        (id<SwiftVLCSampleBufferRendering> )renderer
+ {
+     NSAssert(_observedRenderer == nil && _rendererRequirementObserver == nil &&
+              _rendererDecodeFailureObserver == nil &&
+@@ -1275,13 +1309,13 @@
+     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+     _rendererRequirementObserver = [center
+         addObserverForName:
+-            AVSampleBufferVideoRendererRequiresFlushToResumeDecodingDidChangeNotification
++            DisplayLayerRequiresFlushNotification()
+         object:renderer
+         queue:nil
+         usingBlock:^(NSNotification *notification) {
+             VLCSampleBufferDisplay *sys = weakSelf;
+-            AVSampleBufferVideoRenderer *notifyingRenderer =
+-                (AVSampleBufferVideoRenderer *)notification.object;
++            id<SwiftVLCSampleBufferRendering> notifyingRenderer =
++                (id<SwiftVLCSampleBufferRendering> )notification.object;
+             if (sys == nil || notifyingRenderer == nil)
+                 return;
+             @synchronized(sys.displayLayerLock) {
+@@ -1301,13 +1335,13 @@
+ 
+     _rendererDecodeFailureObserver = [center
+         addObserverForName:
+-            AVSampleBufferVideoRendererDidFailToDecodeNotification
++            DisplayLayerDecodeFailureNotification()
+         object:renderer
+         queue:nil
+         usingBlock:^(NSNotification *notification) {
+             VLCSampleBufferDisplay *sys = weakSelf;
+-            AVSampleBufferVideoRenderer *notifyingRenderer =
+-                (AVSampleBufferVideoRenderer *)notification.object;
++            id<SwiftVLCSampleBufferRendering> notifyingRenderer =
++                (id<SwiftVLCSampleBufferRendering> )notification.object;
+             if (sys == nil || notifyingRenderer == nil)
+                 return;
+             @synchronized(sys.displayLayerLock) {
+@@ -1333,7 +1367,7 @@
+             if (sys == nil)
+                 return;
+             @synchronized(sys.displayLayerLock) {
+-                AVSampleBufferVideoRenderer *current = sys.observedRenderer;
++                id<SwiftVLCSampleBufferRendering> current = sys.observedRenderer;
+                 if (![sys isCurrentRendererLocked:current
+                                               generation:generation])
+                     return;
+@@ -1468,7 +1502,7 @@
+                 sys.spuView = spuView;
+                 sys.displayLayer = displayLayer;
+                 [sys installObserversForRendererLocked:
+-                    displayLayer.sampleBufferRenderer];
++                    DisplayLayerRenderer(displayLayer)];
+             }
+             if (presentationContext != NULL)
+                 preparePresentationContext(
+@@ -1633,8 +1667,8 @@
+                             refreshGeneration &&
+                         sys->latestFrameSequence == frameSequence &&
+                         sys.displayLayer != nil) {
+-                        AVSampleBufferVideoRenderer *renderer =
+-                            sys.displayLayer.sampleBufferRenderer;
++                        id<SwiftVLCSampleBufferRendering> renderer =
++                            DisplayLayerRenderer(sys.displayLayer);
+                         /* This one bounded transition sample makes paused PiP
+                          * entry and inline restoration reflect the new
+                          * composition mode without waiting for another frame. */
+@@ -1887,8 +1921,8 @@
+             return -EAGAIN;
+         else
+         {
+-            AVSampleBufferVideoRenderer *renderer =
+-                displayLayer.sampleBufferRenderer;
++            id<SwiftVLCSampleBufferRendering> renderer =
++                DisplayLayerRenderer(displayLayer);
+             VLCSampleBufferRendererGateResult gate =
+                 [sys prepareRendererLocked:renderer
+                                  generation:sys->rendererGeneration
+@@ -2128,8 +2162,8 @@
+         AVSampleBufferDisplayLayer *displayLayer = sys.displayLayer;
+         if (displayLayer != nil && !sys.displayClosed)
+         {
+-            AVSampleBufferVideoRenderer *renderer =
+-                displayLayer.sampleBufferRenderer;
++            id<SwiftVLCSampleBufferRendering> renderer =
++                DisplayLayerRenderer(displayLayer);
+             VLCSampleBufferRendererGateResult result =
+                 [sys enqueueSampleBufferLocked:sampleBuffer
+                                      renderer:renderer
+@@ -2495,8 +2529,8 @@
+                                       memory_order_acq_rel);
+             ++sys->latestFrameSequence;
+             ++sys->overlayAcceptedSubmissionSequence;
+-            AVSampleBufferVideoRenderer *renderer =
+-                sys.displayLayer.sampleBufferRenderer;
++            id<SwiftVLCSampleBufferRendering> renderer =
++                DisplayLayerRenderer(sys.displayLayer);
+             if (renderer != nil)
+             {
+                 vlc_samplebuffer_renderer_increment(
+@@ -2524,7 +2558,7 @@
+     VLCSampleBufferDisplay *sys =
+         (__bridge VLCSampleBufferDisplay *)vd->sys;
+     @synchronized(sys.displayLayerLock) {
+-        AVSampleBufferVideoRenderer *renderer = sys.observedRenderer;
++        id<SwiftVLCSampleBufferRendering> renderer = sys.observedRenderer;
+         uint64_t generation = sys->rendererGeneration;
+         if (![sys isCurrentRendererLocked:renderer generation:generation])
+             return false;

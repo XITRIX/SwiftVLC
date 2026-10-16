@@ -144,7 +144,7 @@ public final class Player {
   /// threads and expect an answer immediately. Blocking those threads on the
   /// main actor is what lets a teardown already waiting on them deadlock, so
   /// the value they need is published here and read atomically instead.
-  nonisolated let nonisolatedPlaybackIntent = Atomic<Bool>(false)
+  nonisolated let nonisolatedPlaybackIntent = Mutex<Bool>(false)
   /// Duration and seekability tagged with the media generation they describe,
   /// for consumers that must not mistake the previous media's capability for
   /// the current one. See ``PlayerCapabilitySnapshot``.

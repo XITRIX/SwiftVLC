@@ -193,7 +193,7 @@ else
     fi
     artifact_info=$(python3 "$SCRIPT_DIR/release-artifact-info.py" Package.swift)
   elif [[ -n "$VERSION" ]]; then
-    artifact_info=$("$SCRIPT_DIR/resolve-release-artifact.sh" --tag "$VERSION")
+    artifact_info=$("$SCRIPT_DIR/resolve-release-artifact.sh" --repo "$REPO" --tag "$VERSION")
   else
     artifact_info=$("$SCRIPT_DIR/resolve-release-artifact.sh")
   fi
@@ -203,6 +203,12 @@ else
     | python3 -c 'import json,sys; value=json.load(sys.stdin); print(value.get("downloadTag", value["tag"]))')
   RESOLVED_URL=$(printf '%s' "$artifact_info" \
     | python3 -c 'import json,sys; print(json.load(sys.stdin)["url"])')
+  # Authentication must target the repository that owns the resolved URL,
+  # including upstream artifacts used while preparing a fork release.
+  case "$RESOLVED_URL" in
+    https://github.com/XITRIX/SwiftVLC/*) REPO="XITRIX/SwiftVLC" ;;
+    https://github.com/harflabs/SwiftVLC/*) REPO="harflabs/SwiftVLC" ;;
+  esac
   RESOLVED_CHECKSUM=$(printf '%s' "$artifact_info" \
     | python3 -c 'import json,sys; print(json.load(sys.stdin)["checksum"])')
   RESOLVED_IS_DRAFT=$(printf '%s' "$artifact_info" \

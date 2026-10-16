@@ -749,7 +749,7 @@ final class MacNativePiPMediaController: NSObject, @unchecked Sendable {
     // snapshot: intent can change on the main actor an instant before AppKit
     // asks, and a snapshot republished afterwards would answer with the
     // previous value.
-    player?.nonisolatedPlaybackIntent.load(ordering: .acquiring) ?? false
+    player?.nonisolatedPlaybackIntent.withLock({ $0 }) ?? false
   }
 
   /// Publishes the snapshot without assuming the caller is already on the main

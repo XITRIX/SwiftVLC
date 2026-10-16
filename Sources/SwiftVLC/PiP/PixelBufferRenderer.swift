@@ -101,11 +101,11 @@ final class PixelBufferRenderer: Sendable {
   /// Lock-free copy-isolation signal mirrored into the active callback handle.
   /// libVLC reads it for every decoded frame, so it must not require renderer
   /// or callback-context mutexes on the normal zero-copy path.
-  let presentationCopyEnabled = Atomic<Bool>(false)
+  let presentationCopyEnabled = Mutex<Bool>(false)
   /// Fast gate for qualification-only callback counters. The callback context
   /// mirrors this value so disabled production callbacks avoid entering the
   /// renderer and callback-context mutexes solely for telemetry.
-  let contentDiagnosticsEnabled = Atomic<Bool>(false)
+  let contentDiagnosticsEnabled = Mutex<Bool>(false)
   let enqueueQueue: DispatchQueue
   let enqueueState = Mutex(PixelBufferEnqueueState())
   let displayLayerAPI: PixelBufferDisplayLayerAPI
@@ -186,7 +186,7 @@ final class PixelBufferRenderer: Sendable {
 
   func setContentFingerprintingEnabled(_ enabled: Bool) {
     if !enabled {
-      contentDiagnosticsEnabled.store(false, ordering: .releasing)
+      contentDiagnosticsEnabled.withLock { $0 = false }
     }
     state.withLock { state in
       state.contentFingerprintingEnabled = enabled
@@ -198,7 +198,7 @@ final class PixelBufferRenderer: Sendable {
       state.lastDecodedFrameMediaTimeSeconds = nil
     }
     if enabled {
-      contentDiagnosticsEnabled.store(true, ordering: .releasing)
+      contentDiagnosticsEnabled.withLock { $0 = true }
     }
   }
 
@@ -207,7 +207,7 @@ final class PixelBufferRenderer: Sendable {
   /// changing after backgrounding, and bounded sampling avoids turning the
   /// diagnostic into a material renderer workload.
   func recordContentFingerprintIfEnabled(of pixelBuffer: CVPixelBuffer) {
-    guard contentDiagnosticsEnabled.load(ordering: .acquiring) else { return }
+    guard contentDiagnosticsEnabled.withLock({ $0 }) else { return }
     guard let fingerprint = Self.sampledContentFingerprint(of: pixelBuffer) else { return }
     state.withLock { state in
       guard state.contentFingerprintingEnabled else { return }
@@ -308,7 +308,7 @@ final class PixelBufferRenderer: Sendable {
   /// The copy is scoped to active PiP. Inline playback keeps the zero-copy
   /// path, and stopping PiP immediately restores it.
   func setPresentationCopyRequired(_ required: Bool) {
-    presentationCopyEnabled.store(required, ordering: .releasing)
+    presentationCopyEnabled.withLock { $0 = required }
     state.withLock { $0.presentationCopyRequired = required }
   }
 
@@ -355,7 +355,7 @@ final class PixelBufferRenderer: Sendable {
 
     // Qualification diagnostics opt into conversion timing. Normal clients
     // avoid even the monotonic-clock reads on this per-frame hot path.
-    let conversionStarted = contentDiagnosticsEnabled.load(ordering: .acquiring)
+    let conversionStarted = contentDiagnosticsEnabled.withLock({ $0 })
       ? DispatchTime.now().uptimeNanoseconds
       : nil
     defer {

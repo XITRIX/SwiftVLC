@@ -812,7 +812,7 @@ extension Integration {
       #expect(observerRan)
       #expect(!player.isPlaybackRequestedActive)
       #expect(!player.isPlaying)
-      let nonisolatedIntent = player.nonisolatedPlaybackIntent.load(ordering: .acquiring)
+      let nonisolatedIntent = player.nonisolatedPlaybackIntent.withLock { $0 }
       #expect(!nonisolatedIntent)
     }
 

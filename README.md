@@ -11,6 +11,16 @@
 
 A Swift wrapper around [libVLC](https://www.videolan.org/vlc/libvlc.html) for iOS, macOS, tvOS, visionOS, and Mac Catalyst.
 
+## Fork compatibility
+
+This fork retains iOS 16 source compatibility and iTorrent's AirPlay surface
+and Picture-in-Picture binding behavior. See [FORK.md](FORK.md) for the upstream
+rebase audit and validation boundary. The current package still references
+upstream's iOS 18 native binary; iOS 16 deployment requires a new fork engine
+built from the complete patch manifest and published with its own checksum.
+The previous fork v1.0.1 binary predates the new native extension contract and
+must not be substituted for the current engine.
+
 ## Why?
 
 AVFoundation is excellent for Apple's native media stack, but its

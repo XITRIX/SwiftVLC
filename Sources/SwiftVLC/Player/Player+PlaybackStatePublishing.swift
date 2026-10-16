@@ -126,7 +126,7 @@ extension Player {
     withMutation(keyPath: \.isPlaybackRequestedActive) {
       guard stillOwnsPublication() else { return }
       storePlaybackIntentWithoutNestedObservation(effectiveActive)
-      nonisolatedPlaybackIntent.store(effectiveActive, ordering: .releasing)
+      nonisolatedPlaybackIntent.withLock { $0 = effectiveActive }
       playbackIntentBridge.broadcast(effectiveActive)
       didCommitIntent = true
     }

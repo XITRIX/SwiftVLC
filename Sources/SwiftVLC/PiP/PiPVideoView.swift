@@ -43,10 +43,12 @@ public struct PiPVideoView: UIViewRepresentable {
   public init(
     _ player: Player,
     controller: Binding<PiPController?>? = nil,
+    onSurfaceReady: ((UIView) -> Void)? = nil,
     startsAutomaticallyFromInline: Bool = true
   ) {
     self.player = player
     controllerBinding = controller
+    self.onSurfaceReady = onSurfaceReady
     self.startsAutomaticallyFromInline = startsAutomaticallyFromInline
     legacyManagesAudioSessionOverride = nil
   }
@@ -70,7 +72,7 @@ public struct PiPVideoView: UIViewRepresentable {
     controller: Binding<PiPController?>? = nil,
     onSurfaceReady: ((UIView) -> Void)? = nil,
     startsAutomaticallyFromInline: Bool = true,
-    managesAudioSession: Bool = true
+    managesAudioSession: Bool
   ) {
     self.player = player
     controllerBinding = controller

@@ -130,6 +130,7 @@ public struct PiPTimebaseDiagnosticSnapshot: Codable, Sendable, Equatable {
   public let lastDeliveredSampleTimeSeconds: Double?
   public let lastDeliveredSamplePlaybackGeneration: UInt64?
   public let displayLayerStatus: String
+  /// Always false before iOS 17.4, where AVFoundation cannot report readiness.
   public let isDisplayLayerReadyForDisplay: Bool
   public let displayLayerRequiresFlush: Bool
   public let displayLayerError: String?
@@ -162,8 +163,22 @@ extension PiPController {
     let hasVmemOutputTimestamps = sourceTimestamps?.isAvailable == true
     let mediaStatistics = player.statistics
     let displayLayer = layer
+    // Older systems cannot report this diagnostic; never infer readiness
+    // from enqueue acceptance or rendering status.
+    let isDisplayLayerReadyForDisplay: Bool
+    if #available(iOS 17.4, *) {
+      isDisplayLayerReadyForDisplay = displayLayer.isReadyForDisplay
+    } else {
+      isDisplayLayerReadyForDisplay = false
+    }
+    let displayLayerError: String?
+    if #available(iOS 17.0, *) {
+      displayLayerError = displayLayer.sampleBufferRenderer.error?.localizedDescription
+    } else {
+      displayLayerError = displayLayer.error?.localizedDescription
+    }
     let displayLayerStatus =
-      switch displayLayer.sampleBufferRenderer.status {
+      switch PixelBufferDisplayLayerAPI.live.status(displayLayer) {
       case .unknown: "unknown"
       case .rendering: "rendering"
       case .failed: "failed"
@@ -268,9 +283,9 @@ extension PiPController {
       lastDeliveredSampleTimeSeconds: telemetry.lastPresentedSampleTimeSeconds,
       lastDeliveredSamplePlaybackGeneration: telemetry.lastPresentedSamplePlaybackGeneration,
       displayLayerStatus: displayLayerStatus,
-      isDisplayLayerReadyForDisplay: displayLayer.isReadyForDisplay,
-      displayLayerRequiresFlush: displayLayer.sampleBufferRenderer.requiresFlushToResumeDecoding,
-      displayLayerError: displayLayer.sampleBufferRenderer.error?.localizedDescription,
+      isDisplayLayerReadyForDisplay: isDisplayLayerReadyForDisplay,
+      displayLayerRequiresFlush: PixelBufferDisplayLayerAPI.live.requiresFlush(displayLayer),
+      displayLayerError: displayLayerError,
       correctionCount: timebaseCorrectionSequence
     )
   }

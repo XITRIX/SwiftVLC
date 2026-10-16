@@ -2124,7 +2124,7 @@ final class IOSNativePiPMediaController: NSObject, IOSNativePiPMediaControlling,
   @objc func isMediaPlaying() -> Bool {
     // Straight from the player's nonisolated mirror: intent can change on the
     // main actor an instant before the query arrives.
-    player?.nonisolatedPlaybackIntent.load(ordering: .acquiring) ?? false
+    player?.nonisolatedPlaybackIntent.withLock({ $0 }) ?? false
   }
 }
 
